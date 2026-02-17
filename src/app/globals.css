@@ -1,26 +1,68 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a12;
+  --foreground: #e0e0e8;
+  --neon-cyan: #00f0ff;
+  --neon-magenta: #ff00e5;
+  --neon-lime: #39ff14;
+  --neon-amber: #ffbf00;
+  --surface: #12121e;
+  --surface-light: #1a1a2e;
+  --border: #2a2a3e;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-neon-cyan: var(--neon-cyan);
+  --color-neon-magenta: var(--neon-magenta);
+  --color-neon-lime: var(--neon-lime);
+  --color-neon-amber: var(--neon-amber);
+  --color-surface: var(--surface);
+  --color-surface-light: var(--surface-light);
+  --color-border: var(--border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Neon glow utilities */
+.glow-cyan {
+  box-shadow:
+    0 0 8px rgba(0, 240, 255, 0.3),
+    0 0 20px rgba(0, 240, 255, 0.1);
+}
+.glow-magenta {
+  box-shadow:
+    0 0 8px rgba(255, 0, 229, 0.3),
+    0 0 20px rgba(255, 0, 229, 0.1);
+}
+.glow-lime {
+  box-shadow:
+    0 0 8px rgba(57, 255, 20, 0.3),
+    0 0 20px rgba(57, 255, 20, 0.1);
+}
+.glow-amber {
+  box-shadow:
+    0 0 8px rgba(255, 191, 0, 0.3),
+    0 0 20px rgba(255, 191, 0, 0.1);
+}
+
+.text-glow-cyan {
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}
+.text-glow-magenta {
+  text-shadow: 0 0 8px rgba(255, 0, 229, 0.5);
+}
+.text-glow-lime {
+  text-shadow: 0 0 8px rgba(57, 255, 20, 0.5);
+}
+.text-glow-amber {
+  text-shadow: 0 0 8px rgba(255, 191, 0, 0.5);
 }
