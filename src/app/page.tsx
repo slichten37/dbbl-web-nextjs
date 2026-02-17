@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Season,
   SeasonTeam,
   SeasonMatch,
   getActiveSeason,
 } from "@/api/seasons";
+import {
+  Match,
+  getMatch,
+} from "@/api/matches";
 import TabNavigator from "@/components/ui/TabNavigator";
+import BowlingScoreboard from "@/components/BowlingScoreboard";
 
 const tabs = [
   { key: "teams", label: "Teams" },
@@ -65,7 +70,9 @@ export default function Home() {
         {activeTab === "schedule" && (
           <SchedulePanel matches={season.matches} teams={season.teams} />
         )}
-        {activeTab === "scores" && <ScoresPanel />}
+        {activeTab === "scores" && (
+          <ScoresPanel matches={season.matches} teams={season.teams} />
+        )}
       </div>
     </div>
   );
@@ -83,18 +90,18 @@ function TeamsPanel({ teams }: { teams: SeasonTeam[] }) {
           key={team.id}
           className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-5 py-3"
         >
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-foreground/40">
+          <h3 className="flex-2 text-xs font-semibold uppercase tracking-widest text-foreground/40">
             {team.name}
           </h3>
           {team.bowlers.length > 0 ? (
-            <div className="flex gap-4">
-              {team.bowlers.map((b) => (
-                <span
+            <div className="flex-1 gap-4">
+              {team.bowlers.map((b, i) => (
+                <div
                   key={b.id}
-                  className="text-base font-medium text-foreground/90"
+                  className={`flex-1 text-right text-base font-medium text-foreground/90`}
                 >
                   {b.name}
-                </span>
+                </div>
               ))}
             </div>
           ) : (
@@ -162,22 +169,41 @@ function SchedulePanel({
 
       {/* Matches */}
       <div className="grid gap-3">
-        {filtered.map((match) => (
-          <div
-            key={match.id}
-            className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-4 py-3"
-          >
-            <span className="text-sm font-medium text-neon-magenta">
-              {match.team1.name}
-            </span>
-            <span className="text-xs text-foreground/30 uppercase tracking-widest">
-              vs
-            </span>
-            <span className="text-sm font-medium text-neon-cyan">
-              {match.team2.name}
-            </span>
-          </div>
-        ))}
+        {filtered.map((match) => {
+          const hasResult = match.team1Score != null && match.team2Score != null;
+          const t1Won = match.winningTeamId === match.team1.id;
+          const t2Won = match.winningTeamId === match.team2.id;
+          return (
+            <div
+              key={match.id}
+              className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-4 py-3"
+            >
+              <div className="flex-1">
+                <span className={`text-sm font-medium ${t1Won ? "text-neon-lime" : "text-neon-magenta"}`}>
+                  {match.team1.name}
+                </span>
+                {hasResult && (
+                  <span className={`ml-2 text-sm font-bold ${t1Won ? "text-neon-lime" : "text-foreground/50"}`}>
+                    {match.team1Score}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-foreground/30 uppercase tracking-widest px-2">
+                {hasResult ? "–" : "vs"}
+              </span>
+              <div className="flex-1 text-right">
+                {hasResult && (
+                  <span className={`mr-2 text-sm font-bold ${t2Won ? "text-neon-lime" : "text-foreground/50"}`}>
+                    {match.team2Score}
+                  </span>
+                )}
+                <span className={`text-sm font-medium ${t2Won ? "text-neon-lime" : "text-neon-cyan"}`}>
+                  {match.team2.name}
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Bye week */}
@@ -195,15 +221,176 @@ function SchedulePanel({
   );
 }
 
-function ScoresPanel() {
+function ScoresPanel({
+  matches,
+  teams,
+}: {
+  matches: SeasonMatch[];
+  teams: SeasonTeam[];
+}) {
+  const weeks = useMemo(() => {
+    const set = new Set(matches.map((m) => m.week));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [matches]);
+
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [fullMatch, setFullMatch] = useState<Match | null>(null);
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (weeks.length > 0 && selectedWeek === null) {
+      setSelectedWeek(weeks[0]);
+    }
+  }, [weeks, selectedWeek]);
+
+  const loadMatch = useCallback(async (matchId: string) => {
+    setSelectedMatchId(matchId);
+    setLoadError(null);
+    setMatchLoading(true);
+    try {
+      const m = await getMatch(matchId);
+      setFullMatch(m);
+    } catch {
+      setLoadError("Failed to load match details.");
+    } finally {
+      setMatchLoading(false);
+    }
+  }, []);
+
+  if (matches.length === 0) {
+    return (
+      <p className="text-foreground/40 text-sm">No matches in this season.</p>
+    );
+  }
+
+  const filteredMatches = matches.filter((m) => m.week === selectedWeek);
+  const hasScores = fullMatch && fullMatch.frames && fullMatch.frames.length > 0;
+
+  const matchBowlers = useMemo(() => {
+    if (!fullMatch) return [];
+    return [...fullMatch.team1.bowlers, ...fullMatch.team2.bowlers];
+  }, [fullMatch]);
+
   return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3">
-      <p className="text-lg font-semibold text-neon-amber text-glow-amber">
-        Coming Soon
-      </p>
-      <p className="text-xs text-foreground/40">
-        Scores will be available here once games are played.
-      </p>
+    <div className="space-y-4">
+      {/* Week chips */}
+      <div className="flex flex-wrap gap-2">
+        {weeks.map((w) => (
+          <button
+            key={w}
+            onClick={() => {
+              setSelectedWeek(w);
+              setSelectedMatchId(null);
+              setFullMatch(null);
+              setLoadError(null);
+            }}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-all duration-200 ${
+              selectedWeek === w
+                ? "border-neon-lime bg-neon-lime/15 text-neon-lime"
+                : "border-border text-foreground/40 hover:border-foreground/30"
+            }`}
+          >
+            Week {w}
+          </button>
+        ))}
+      </div>
+
+      {/* Match selector */}
+      {!selectedMatchId && (
+        <div className="grid gap-3">
+          {filteredMatches.map((match) => {
+            const hasResult = match.team1Score != null && match.team2Score != null;
+            const t1Won = match.winningTeamId === match.team1.id;
+            const t2Won = match.winningTeamId === match.team2.id;
+            return (
+              <button
+                key={match.id}
+                onClick={() => loadMatch(match.id)}
+                className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-4 py-3 transition-all hover:border-neon-cyan/40 hover:bg-surface-light/80"
+              >
+                <div className="flex-1 text-left">
+                  <span className={`text-sm font-medium ${t1Won ? "text-neon-lime" : "text-neon-magenta"}`}>
+                    {match.team1.name}
+                  </span>
+                  {hasResult && (
+                    <span className={`ml-2 text-sm font-bold ${t1Won ? "text-neon-lime" : "text-foreground/50"}`}>
+                      {match.team1Score}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-foreground/30 uppercase tracking-widest px-2">
+                  {hasResult ? "–" : "vs"}
+                </span>
+                <div className="flex-1 text-right">
+                  {hasResult && (
+                    <span className={`mr-2 text-sm font-bold ${t2Won ? "text-neon-lime" : "text-foreground/50"}`}>
+                      {match.team2Score}
+                    </span>
+                  )}
+                  <span className={`text-sm font-medium ${t2Won ? "text-neon-lime" : "text-neon-cyan"}`}>
+                    {match.team2.name}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Match detail */}
+      {selectedMatchId && (
+        <div className="space-y-4">
+          <button
+            onClick={() => {
+              setSelectedMatchId(null);
+              setFullMatch(null);
+              setLoadError(null);
+            }}
+            className="text-xs text-foreground/40 hover:text-foreground/60 transition-colors"
+          >
+            ← Back to matches
+          </button>
+
+          {matchLoading && (
+            <p className="text-foreground/40 text-sm animate-pulse">
+              Loading match...
+            </p>
+          )}
+
+          {loadError && (
+            <p className="text-sm text-red-400">{loadError}</p>
+          )}
+
+          {!matchLoading && hasScores && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-foreground/60 uppercase tracking-widest">
+                Scoreboard
+              </h3>
+              <BowlingScoreboard
+                frames={fullMatch!.frames}
+                bowlers={matchBowlers}
+              />
+            </div>
+          )}
+
+          {!matchLoading && !hasScores && !loadError && (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface py-12 gap-3">
+              <p className="text-sm text-foreground/40">
+                No scores recorded yet
+              </p>
+              <p className="text-xs text-foreground/30">
+                Submit scores from the{" "}
+                <a href="/scores" className="text-neon-cyan underline">
+                  Scores
+                </a>{" "}
+                page
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
