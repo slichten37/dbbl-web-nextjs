@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TabNavigator } from "@/components/ui";
 import { NeonButton, NeonInput } from "@/components/ui";
 import {
@@ -11,7 +11,7 @@ import {
   ScoresTab,
 } from "./tabs";
 
-const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "yesIGeeb";
+const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "yesIGeeb!";
 
 const tabs = [
   { key: "seasons", label: "Seasons" },
@@ -29,11 +29,22 @@ const tabPanels: Record<string, React.ReactNode> = {
   scores: <ScoresTab />,
 };
 
+const wrongPasswordMessages = [
+  "No you're not, don't lie.",
+  "Hey get fucked buddy.",
+  "You don't even geeb.",
+  "You wish pal.",
+  "Sorry you're just too ugly",
+  "That's not it, chief.",
+  "Damn that's a bad guess.",
+];
+
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("seasons");
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const attemptRef = useRef(0);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("dbbl-admin-auth");
@@ -46,10 +57,15 @@ export default function AdminPage() {
     e.preventDefault();
     if (password === ADMIN_PASSWORD) {
       setAuthenticated(true);
-      setError(false);
+      setErrorMsg(null);
       sessionStorage.setItem("dbbl-admin-auth", "true");
     } else {
-      setError(true);
+      setErrorMsg(
+        wrongPasswordMessages[
+          attemptRef.current % wrongPasswordMessages.length
+        ],
+      );
+      attemptRef.current++;
     }
   };
 
@@ -73,13 +89,13 @@ export default function AdminPage() {
             value={password}
             onChange={(e) => {
               setPassword(e.target.value);
-              setError(false);
+              setErrorMsg(null);
             }}
             id="admin-password"
           />
-          {error && (
+          {errorMsg && (
             <p className="text-xs text-neon-magenta text-glow-magenta">
-              {"No you're not, don't lie"}
+              {errorMsg}
             </p>
           )}
           <NeonButton type="submit" variant="cyan" disabled={!password}>
