@@ -57,8 +57,8 @@ export default function MatchesTab() {
   //   setSaving(true);
   //   try {
   //     const data = {
-  //       team1Id,
-  //       team2Id,
+  //       homeTeamId: team1Id,
+  //       awayTeamId: team2Id,
   //       seasonId,
   //       week: parseInt(week, 10),
   //     };
@@ -76,8 +76,8 @@ export default function MatchesTab() {
 
   // const startEdit = (match: Match) => {
   //   setEditingId(match.id);
-  //   setTeam1Id(match.team1Id);
-  //   setTeam2Id(match.team2Id);
+  //   setTeam1Id(match.homeTeamId);
+  //   setTeam2Id(match.awayTeamId);
   //   setSeasonId(match.seasonId);
   //   setWeek(String(match.week));
   // };
@@ -207,16 +207,18 @@ export default function MatchesTab() {
               >
                 <div>
                   <p className="text-sm font-medium">
-                    <span className="text-neon-cyan">{match.team1.name}</span>
+                    <span className="text-neon-cyan">
+                      {match.homeTeam.name}
+                    </span>
                     <span className="text-foreground/40 mx-2">vs</span>
                     <span className="text-neon-magenta">
-                      {match.team2.name}
+                      {match.awayTeam.name}
                     </span>
                   </p>
                   <p className="text-xs text-foreground/40 mt-0.5">
                     {match.season.name} · Week {match.week} ·{" "}
-                    {match.frames.length} frame
-                    {match.frames.length !== 1 ? "s" : ""}
+                    {match.games.length} game
+                    {match.games.length !== 1 ? "s" : ""} scored
                   </p>
                 </div>
                 {/* <NeonButton variant="amber" onClick={() => startEdit(match)}>

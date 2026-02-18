@@ -91,9 +91,16 @@ export default function BowlersTab() {
               className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-4 py-3"
             >
               <div>
-                <p className="text-sm font-medium text-neon-cyan">
-                  {bowler.name}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-neon-cyan">
+                    {bowler.name}
+                  </p>
+                  {bowler.teams.length === 0 && (
+                    <span className="rounded-full border border-neon-amber/40 bg-neon-amber/10 px-1.5 py-0.5 text-[10px] font-medium text-neon-amber">
+                      Substitute
+                    </span>
+                  )}
+                </div>
                 {bowler.teams.length > 0 && (
                   <p className="text-xs text-foreground/40 mt-0.5">
                     Teams: {bowler.teams.map((t) => t.name).join(", ")}

@@ -7,10 +7,7 @@ import {
   SeasonMatch,
   getActiveSeason,
 } from "@/api/seasons";
-import {
-  Match,
-  getMatch,
-} from "@/api/matches";
+import { Match, MatchGame, getMatch } from "@/api/matches";
 import TabNavigator from "@/components/ui/TabNavigator";
 import BowlingScoreboard from "@/components/BowlingScoreboard";
 
@@ -63,10 +60,16 @@ export default function Home() {
         Active Season
       </p>
 
-      <TabNavigator tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabNavigator
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
       <div className="mt-6">
-        {activeTab === "teams" && <TeamsPanel teams={season.teams} />}
+        {activeTab === "teams" && (
+          <TeamsPanel teams={season.teams} matches={season.matches} />
+        )}
         {activeTab === "schedule" && (
           <SchedulePanel matches={season.matches} teams={season.teams} />
         )}
@@ -78,35 +81,73 @@ export default function Home() {
   );
 }
 
-function TeamsPanel({ teams }: { teams: SeasonTeam[] }) {
-  if (teams.length === 0) {
-    return <p className="text-foreground/40 text-sm">No teams in this season.</p>;
+function TeamsPanel({
+  teams,
+  matches,
+}: {
+  teams: SeasonTeam[];
+  matches: SeasonMatch[];
+}) {
+  const teamsWithPoints = useMemo(() => {
+    const pointsMap = new Map<string, number>();
+    teams.forEach((t) => pointsMap.set(t.id, 0));
+
+    matches.forEach((m) => {
+      if (m.homeTeamPoints != null) {
+        pointsMap.set(
+          m.homeTeam.id,
+          (pointsMap.get(m.homeTeam.id) || 0) + m.homeTeamPoints,
+        );
+      }
+      if (m.awayTeamPoints != null) {
+        pointsMap.set(
+          m.awayTeam.id,
+          (pointsMap.get(m.awayTeam.id) || 0) + m.awayTeamPoints,
+        );
+      }
+    });
+
+    return teams
+      .map((t) => ({ ...t, totalPoints: pointsMap.get(t.id) || 0 }))
+      .sort((a, b) => b.totalPoints - a.totalPoints);
+  }, [teams, matches]);
+
+  if (teamsWithPoints.length === 0) {
+    return (
+      <p className="text-foreground/40 text-sm">No teams in this season.</p>
+    );
   }
 
   return (
     <div className="grid gap-3">
-      {teams.map((team) => (
+      {teamsWithPoints.map((team, index) => (
         <div
           key={team.id}
           className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-5 py-3"
         >
-          <h3 className="flex-2 text-xs font-semibold uppercase tracking-widest text-foreground/40">
-            {team.name}
-          </h3>
-          {team.bowlers.length > 0 ? (
-            <div className="flex-1 gap-4">
-              {team.bowlers.map((b, i) => (
-                <div
-                  key={b.id}
-                  className={`flex-1 text-right text-base font-medium text-foreground/90`}
-                >
-                  {b.name}
-                </div>
-              ))}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-foreground/20 w-4 text-center">
+              {index + 1}
+            </span>
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-foreground/40">
+                {team.name}
+              </h3>
+              {team.bowlers.length > 0 ? (
+                <p className="text-sm text-foreground/90">
+                  {team.bowlers.map((b) => b.name).join(" · ")}
+                </p>
+              ) : (
+                <p className="text-sm text-foreground/30">No bowlers</p>
+              )}
             </div>
-          ) : (
-            <p className="text-sm text-foreground/30">No bowlers</p>
-          )}
+          </div>
+          <span className="text-sm font-bold text-neon-amber">
+            {team.totalPoints}{" "}
+            <span className="text-[10px] font-normal text-foreground/30">
+              pts
+            </span>
+          </span>
         </div>
       ))}
     </div>
@@ -134,7 +175,9 @@ function SchedulePanel({
   }, [weeks, selectedWeek]);
 
   if (matches.length === 0) {
-    return <p className="text-foreground/40 text-sm">No schedule generated yet.</p>;
+    return (
+      <p className="text-foreground/40 text-sm">No schedule generated yet.</p>
+    );
   }
 
   const filtered = matches.filter((m) => m.week === selectedWeek);
@@ -143,7 +186,7 @@ function SchedulePanel({
   const byeTeam = useMemo(() => {
     if (teams.length % 2 === 0) return null;
     const playingIds = new Set(
-      filtered.flatMap((m) => [m.team1.id, m.team2.id]),
+      filtered.flatMap((m) => [m.homeTeam.id, m.awayTeam.id]),
     );
     return teams.find((t) => !playingIds.has(t.id)) ?? null;
   }, [teams, filtered]);
@@ -170,21 +213,26 @@ function SchedulePanel({
       {/* Matches */}
       <div className="grid gap-3">
         {filtered.map((match) => {
-          const hasResult = match.team1Score != null && match.team2Score != null;
-          const t1Won = match.winningTeamId === match.team1.id;
-          const t2Won = match.winningTeamId === match.team2.id;
+          const hasResult =
+            match.homeTeamPoints != null && match.awayTeamPoints != null;
+          const homeWon = match.winningTeamId === match.homeTeam.id;
+          const awayWon = match.winningTeamId === match.awayTeam.id;
           return (
             <div
               key={match.id}
               className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-4 py-3"
             >
               <div className="flex-1">
-                <span className={`text-sm font-medium ${t1Won ? "text-neon-lime" : "text-neon-magenta"}`}>
-                  {match.team1.name}
+                <span
+                  className={`text-sm font-medium ${homeWon ? "text-neon-lime" : "text-neon-magenta"}`}
+                >
+                  {match.homeTeam.name}
                 </span>
                 {hasResult && (
-                  <span className={`ml-2 text-sm font-bold ${t1Won ? "text-neon-lime" : "text-foreground/50"}`}>
-                    {match.team1Score}
+                  <span
+                    className={`ml-2 text-sm font-bold ${homeWon ? "text-neon-lime" : "text-foreground/50"}`}
+                  >
+                    {match.homeTeamPoints}pts
                   </span>
                 )}
               </div>
@@ -193,12 +241,16 @@ function SchedulePanel({
               </span>
               <div className="flex-1 text-right">
                 {hasResult && (
-                  <span className={`mr-2 text-sm font-bold ${t2Won ? "text-neon-lime" : "text-foreground/50"}`}>
-                    {match.team2Score}
+                  <span
+                    className={`mr-2 text-sm font-bold ${awayWon ? "text-neon-lime" : "text-foreground/50"}`}
+                  >
+                    {match.awayTeamPoints}pts
                   </span>
                 )}
-                <span className={`text-sm font-medium ${t2Won ? "text-neon-lime" : "text-neon-cyan"}`}>
-                  {match.team2.name}
+                <span
+                  className={`text-sm font-medium ${awayWon ? "text-neon-lime" : "text-neon-cyan"}`}
+                >
+                  {match.awayTeam.name}
                 </span>
               </div>
             </div>
@@ -238,6 +290,7 @@ function ScoresPanel({
   const [fullMatch, setFullMatch] = useState<Match | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedGameNumber, setSelectedGameNumber] = useState<number>(1);
 
   useEffect(() => {
     if (weeks.length > 0 && selectedWeek === null) {
@@ -266,11 +319,32 @@ function ScoresPanel({
   }
 
   const filteredMatches = matches.filter((m) => m.week === selectedWeek);
-  const hasScores = fullMatch && fullMatch.frames && fullMatch.frames.length > 0;
+  const hasScores =
+    fullMatch &&
+    fullMatch.games &&
+    fullMatch.games.some((g) => g.frames.length > 0);
+
+  const selectedGame: MatchGame | undefined = fullMatch?.games?.find(
+    (g) => g.gameNumber === selectedGameNumber,
+  );
 
   const matchBowlers = useMemo(() => {
     if (!fullMatch) return [];
-    return [...fullMatch.team1.bowlers, ...fullMatch.team2.bowlers];
+    const subMap = new Map<string, { id: string; name: string }>();
+    for (const sub of fullMatch.substitutions ?? []) {
+      subMap.set(sub.originalBowlerId, {
+        id: sub.substituteBowler.id,
+        name: sub.substituteBowler.name,
+      });
+    }
+    const mapBowler = (b: { id: string; name: string }) => {
+      const replacement = subMap.get(b.id);
+      return replacement ?? b;
+    };
+    return [
+      ...fullMatch.homeTeam.bowlers.map(mapBowler),
+      ...fullMatch.awayTeam.bowlers.map(mapBowler),
+    ];
   }, [fullMatch]);
 
   return (
@@ -301,9 +375,10 @@ function ScoresPanel({
       {!selectedMatchId && (
         <div className="grid gap-3">
           {filteredMatches.map((match) => {
-            const hasResult = match.team1Score != null && match.team2Score != null;
-            const t1Won = match.winningTeamId === match.team1.id;
-            const t2Won = match.winningTeamId === match.team2.id;
+            const hasResult =
+              match.homeTeamPoints != null && match.awayTeamPoints != null;
+            const homeWon = match.winningTeamId === match.homeTeam.id;
+            const awayWon = match.winningTeamId === match.awayTeam.id;
             return (
               <button
                 key={match.id}
@@ -311,12 +386,16 @@ function ScoresPanel({
                 className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-4 py-3 transition-all hover:border-neon-cyan/40 hover:bg-surface-light/80"
               >
                 <div className="flex-1 text-left">
-                  <span className={`text-sm font-medium ${t1Won ? "text-neon-lime" : "text-neon-magenta"}`}>
-                    {match.team1.name}
+                  <span
+                    className={`text-sm font-medium ${homeWon ? "text-neon-lime" : "text-neon-magenta"}`}
+                  >
+                    {match.homeTeam.name}
                   </span>
                   {hasResult && (
-                    <span className={`ml-2 text-sm font-bold ${t1Won ? "text-neon-lime" : "text-foreground/50"}`}>
-                      {match.team1Score}
+                    <span
+                      className={`ml-2 text-sm font-bold ${homeWon ? "text-neon-lime" : "text-foreground/50"}`}
+                    >
+                      {match.homeTeamPoints}pts
                     </span>
                   )}
                 </div>
@@ -325,12 +404,16 @@ function ScoresPanel({
                 </span>
                 <div className="flex-1 text-right">
                   {hasResult && (
-                    <span className={`mr-2 text-sm font-bold ${t2Won ? "text-neon-lime" : "text-foreground/50"}`}>
-                      {match.team2Score}
+                    <span
+                      className={`mr-2 text-sm font-bold ${awayWon ? "text-neon-lime" : "text-foreground/50"}`}
+                    >
+                      {match.awayTeamPoints}pts
                     </span>
                   )}
-                  <span className={`text-sm font-medium ${t2Won ? "text-neon-lime" : "text-neon-cyan"}`}>
-                    {match.team2.name}
+                  <span
+                    className={`text-sm font-medium ${awayWon ? "text-neon-lime" : "text-neon-cyan"}`}
+                  >
+                    {match.awayTeam.name}
                   </span>
                 </div>
               </button>
@@ -359,19 +442,41 @@ function ScoresPanel({
             </p>
           )}
 
-          {loadError && (
-            <p className="text-sm text-red-400">{loadError}</p>
-          )}
+          {loadError && <p className="text-sm text-red-400">{loadError}</p>}
 
           {!matchLoading && hasScores && (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-foreground/60 uppercase tracking-widest">
                 Scoreboard
               </h3>
-              <BowlingScoreboard
-                frames={fullMatch!.frames}
-                bowlers={matchBowlers}
-              />
+
+              {/* Game tabs */}
+              <div className="flex gap-2">
+                {[1, 2, 3].map((gn) => (
+                  <button
+                    key={gn}
+                    onClick={() => setSelectedGameNumber(gn)}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-all duration-200 ${
+                      selectedGameNumber === gn
+                        ? "border-neon-cyan bg-neon-cyan/15 text-neon-cyan"
+                        : "border-border text-foreground/40 hover:border-foreground/30"
+                    }`}
+                  >
+                    Game {gn}
+                  </button>
+                ))}
+              </div>
+
+              {selectedGame && selectedGame.frames.length > 0 ? (
+                <BowlingScoreboard
+                  frames={selectedGame.frames}
+                  bowlers={matchBowlers}
+                />
+              ) : (
+                <p className="text-sm text-foreground/40">
+                  No scores for Game {selectedGameNumber} yet.
+                </p>
+              )}
             </div>
           )}
 
@@ -379,13 +484,6 @@ function ScoresPanel({
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface py-12 gap-3">
               <p className="text-sm text-foreground/40">
                 No scores recorded yet
-              </p>
-              <p className="text-xs text-foreground/30">
-                Submit scores from the{" "}
-                <a href="/scores" className="text-neon-cyan underline">
-                  Scores
-                </a>{" "}
-                page
               </p>
             </div>
           )}

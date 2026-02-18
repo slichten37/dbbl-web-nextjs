@@ -50,8 +50,32 @@ export interface MatchFrame {
   ball3Score: number | null;
   isBall1Split: boolean;
   bowlerId: string;
-  matchId: string;
+  gameId: string;
   bowler: MatchBowler;
+}
+
+export interface MatchGame {
+  id: string;
+  gameNumber: number;
+  matchId: string;
+  homeTeamScore: number | null;
+  awayTeamScore: number | null;
+  homeTeamStrikes: number | null;
+  awayTeamStrikes: number | null;
+  homeTeamPoints: number | null;
+  awayTeamPoints: number | null;
+  frames: MatchFrame[];
+}
+
+export interface MatchSubstitution {
+  id: string;
+  matchId: string;
+  originalBowlerId: string;
+  substituteBowlerId: string;
+  teamId: string;
+  originalBowler: MatchBowler;
+  substituteBowler: MatchBowler;
+  team: { id: string; name: string };
 }
 
 export interface Match {
@@ -59,18 +83,17 @@ export interface Match {
   week: number;
   createdAtUtc: string;
   updatedAtUtc: string;
-  team1Id: string;
-  team2Id: string;
+  homeTeamId: string;
+  awayTeamId: string;
   seasonId: string;
   winningTeamId: string | null;
-  team1Score: number | null;
-  team2Score: number | null;
-  team1Strikes: number | null;
-  team2Strikes: number | null;
-  team1: MatchTeam;
-  team2: MatchTeam;
+  homeTeamPoints: number | null;
+  awayTeamPoints: number | null;
+  homeTeam: MatchTeam;
+  awayTeam: MatchTeam;
   season: { id: string; name: string };
-  frames: MatchFrame[];
+  games: MatchGame[];
+  substitutions: MatchSubstitution[];
 }
 
 // ============================================================================
@@ -88,8 +111,8 @@ export async function getMatch(id: string): Promise<Match> {
 }
 
 export async function createMatch(data: {
-  team1Id: string;
-  team2Id: string;
+  homeTeamId: string;
+  awayTeamId: string;
   seasonId: string;
   week: number;
 }): Promise<Match> {
@@ -100,8 +123,8 @@ export async function createMatch(data: {
 export async function updateMatch(
   id: string,
   data: {
-    team1Id?: string;
-    team2Id?: string;
+    homeTeamId?: string;
+    awayTeamId?: string;
     seasonId?: string;
     week?: number;
   },
@@ -126,9 +149,11 @@ export async function analyzeScorecard(
 
 export async function submitScores(
   matchId: string,
+  gameNumber: number,
   bowlers: BowlerFrameData[],
 ): Promise<Match> {
   const payload = {
+    gameNumber,
     bowlers: bowlers.map((b) => ({
       bowlerId: b.matchedBowlerId,
       frames: b.frames,
@@ -137,6 +162,28 @@ export async function submitScores(
   const res = await api.post<Match>(
     `/matches/${matchId}/submit-scores`,
     payload,
+  );
+  return res.data;
+}
+
+export async function createSubstitution(
+  matchId: string,
+  data: {
+    originalBowlerId: string;
+    substituteBowlerId: string;
+    teamId: string;
+  },
+): Promise<Match> {
+  const res = await api.post<Match>(`/matches/${matchId}/substitutions`, data);
+  return res.data;
+}
+
+export async function deleteSubstitution(
+  matchId: string,
+  substitutionId: string,
+): Promise<Match> {
+  const res = await api.delete<Match>(
+    `/matches/${matchId}/substitutions/${substitutionId}`,
   );
   return res.data;
 }

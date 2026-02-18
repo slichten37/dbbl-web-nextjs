@@ -9,17 +9,21 @@ import {
 } from "@/api/seasons";
 import {
   Match,
+  MatchGame,
   BowlerFrameData,
   ScorecardAnalysisResult,
   getMatch,
   analyzeScorecard,
   submitScores,
+  createSubstitution,
+  deleteSubstitution,
 } from "@/api/matches";
+import { Bowler, getBowlers } from "@/api/bowlers";
 import BowlingScoreboard, {
   BowlingScoreboardEditable,
 } from "@/components/BowlingScoreboard";
 
-export default function ScoresPage() {
+export default function ScoresTab() {
   const [season, setSeason] = useState<Season | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,40 +37,19 @@ export default function ScoresPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-foreground/40 text-sm animate-pulse">Loading...</p>
-      </div>
+      <p className="text-foreground/40 text-sm animate-pulse">Loading...</p>
     );
   }
 
   if (error || !season) {
     return (
-      <div className="min-h-screen bg-background px-6 py-8">
-        <h1 className="text-2xl font-bold tracking-wider uppercase text-neon-amber text-glow-amber">
-          🎳 Submit Scores
-        </h1>
-        <p className="text-foreground/40 text-sm mt-4">
-          {error || "No active season."}
-        </p>
-      </div>
+      <p className="text-foreground/40 text-sm">
+        {error || "No active season."}
+      </p>
     );
   }
 
-  return (
-    <div className="mx-auto max-w-2xl px-4 py-8 pb-28">
-      <h1 className="text-2xl font-bold text-neon-amber text-glow-amber mb-1">
-        Submit Scores
-      </h1>
-      <p className="text-xs text-foreground/40 mb-6 uppercase tracking-widest">
-        {season.name}
-      </p>
-
-      <SubmitScoresPanel
-        matches={season.matches}
-        teams={season.teams}
-      />
-    </div>
-  );
+  return <SubmitScoresPanel matches={season.matches} teams={season.teams} />;
 }
 
 function SubmitScoresPanel({
@@ -84,15 +67,28 @@ function SubmitScoresPanel({
 
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [selectedGameNumber, setSelectedGameNumber] = useState<number>(1);
 
   // ---- Full match data ----
   const [fullMatch, setFullMatch] = useState<Match | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
 
+  // ---- All bowlers (for sub picker) ----
+  const [allBowlers, setAllBowlers] = useState<Bowler[]>([]);
+
+  // ---- Substitution form ----
+  const [subTeamId, setSubTeamId] = useState<string>("");
+  const [subOriginalId, setSubOriginalId] = useState<string>("");
+  const [subSubstituteId, setSubSubstituteId] = useState<string>("");
+  const [subSaving, setSubSaving] = useState(false);
+  const [subError, setSubError] = useState<string | null>(null);
+
   // ---- Upload & analysis ----
   const [analysisResult, setAnalysisResult] =
     useState<ScorecardAnalysisResult | null>(null);
-  const [editableBowlers, setEditableBowlers] = useState<BowlerFrameData[] | null>(null);
+  const [editableBowlers, setEditableBowlers] = useState<
+    BowlerFrameData[] | null
+  >(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -113,8 +109,9 @@ function SubmitScoresPanel({
     setUploadError(null);
     setMatchLoading(true);
     try {
-      const m = await getMatch(matchId);
+      const [m, bowlers] = await Promise.all([getMatch(matchId), getBowlers()]);
       setFullMatch(m);
+      setAllBowlers(bowlers);
     } catch {
       setUploadError("Failed to load match details.");
     } finally {
@@ -141,7 +138,6 @@ function SubmitScoresPanel({
         );
       } else {
         setAnalysisResult(result);
-        // Deep-clone bowlers so edits don't mutate the original result
         setEditableBowlers(
           JSON.parse(JSON.stringify(result.bowlers)) as BowlerFrameData[],
         );
@@ -160,7 +156,11 @@ function SubmitScoresPanel({
     setSubmitting(true);
     setUploadError(null);
     try {
-      const updatedMatch = await submitScores(selectedMatchId, editableBowlers);
+      const updatedMatch = await submitScores(
+        selectedMatchId,
+        selectedGameNumber,
+        editableBowlers,
+      );
       setFullMatch(updatedMatch);
       setAnalysisResult(null);
       setEditableBowlers(null);
@@ -185,13 +185,92 @@ function SubmitScoresPanel({
   }
 
   const filteredMatches = matches.filter((m) => m.week === selectedWeek);
-  const hasExistingScores =
-    fullMatch && fullMatch.frames && fullMatch.frames.length > 0;
+
+  const selectedGame: MatchGame | undefined = fullMatch?.games?.find(
+    (g) => g.gameNumber === selectedGameNumber,
+  );
+  const hasExistingScores = selectedGame && selectedGame.frames.length > 0;
 
   const matchBowlers = useMemo(() => {
     if (!fullMatch) return [];
-    return [...fullMatch.team1.bowlers, ...fullMatch.team2.bowlers];
+    const subMap = new Map<string, { id: string; name: string }>();
+    for (const sub of fullMatch.substitutions ?? []) {
+      subMap.set(sub.originalBowlerId, {
+        id: sub.substituteBowler.id,
+        name: sub.substituteBowler.name,
+      });
+    }
+    const mapBowler = (b: { id: string; name: string }) => {
+      const replacement = subMap.get(b.id);
+      return replacement ?? b;
+    };
+    return [
+      ...fullMatch.homeTeam.bowlers.map(mapBowler),
+      ...fullMatch.awayTeam.bowlers.map(mapBowler),
+    ];
   }, [fullMatch]);
+
+  // Substitution helpers
+  const teamBowlersForSub = useMemo(() => {
+    if (!fullMatch || !subTeamId) return [];
+    const team =
+      subTeamId === fullMatch.homeTeamId
+        ? fullMatch.homeTeam
+        : fullMatch.awayTeam;
+    const alreadySubbed = new Set(
+      (fullMatch.substitutions ?? []).map((s) => s.originalBowlerId),
+    );
+    return team.bowlers.filter((b) => !alreadySubbed.has(b.id));
+  }, [fullMatch, subTeamId]);
+
+  const availableSubs = useMemo(() => {
+    if (!fullMatch) return [];
+    const matchTeamBowlerIds = new Set([
+      ...fullMatch.homeTeam.bowlers.map((b) => b.id),
+      ...fullMatch.awayTeam.bowlers.map((b) => b.id),
+    ]);
+    const alreadySubbing = new Set(
+      (fullMatch.substitutions ?? []).map((s) => s.substituteBowlerId),
+    );
+    return allBowlers.filter(
+      (b) =>
+        b.teams.length === 0 &&
+        !matchTeamBowlerIds.has(b.id) &&
+        !alreadySubbing.has(b.id),
+    );
+  }, [fullMatch, allBowlers]);
+
+  const handleAddSub = async () => {
+    if (!selectedMatchId || !subOriginalId || !subSubstituteId || !subTeamId)
+      return;
+    setSubSaving(true);
+    setSubError(null);
+    try {
+      const updated = await createSubstitution(selectedMatchId, {
+        originalBowlerId: subOriginalId,
+        substituteBowlerId: subSubstituteId,
+        teamId: subTeamId,
+      });
+      setFullMatch(updated);
+      setSubOriginalId("");
+      setSubSubstituteId("");
+      setSubTeamId("");
+    } catch {
+      setSubError("Failed to add substitution.");
+    } finally {
+      setSubSaving(false);
+    }
+  };
+
+  const handleRemoveSub = async (subId: string) => {
+    if (!selectedMatchId) return;
+    try {
+      const updated = await deleteSubstitution(selectedMatchId, subId);
+      setFullMatch(updated);
+    } catch {
+      setSubError("Failed to remove substitution.");
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -210,7 +289,7 @@ function SubmitScoresPanel({
             }}
             className={`rounded-full border px-3 py-1 text-xs font-medium transition-all duration-200 ${
               selectedWeek === w
-                ? "border-neon-lime bg-neon-lime/15 text-neon-lime"
+                ? "border-neon-amber bg-neon-amber/15 text-neon-amber"
                 : "border-border text-foreground/40 hover:border-foreground/30"
             }`}
           >
@@ -226,16 +305,16 @@ function SubmitScoresPanel({
             <button
               key={match.id}
               onClick={() => loadMatch(match.id)}
-              className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-4 py-3 transition-all hover:border-neon-cyan/40 hover:bg-surface-light/80"
+              className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-4 py-3 transition-all hover:border-neon-amber/40 hover:bg-surface-light/80"
             >
               <span className="flex-1 text-sm font-medium text-neon-magenta">
-                {match.team1.name}
+                {match.homeTeam.name}
               </span>
               <span className="text-xs text-foreground/30 uppercase tracking-widest">
                 vs
               </span>
               <span className="flex-1 text-right text-sm font-medium text-neon-cyan">
-                {match.team2.name}
+                {match.awayTeam.name}
               </span>
             </button>
           ))}
@@ -264,12 +343,152 @@ function SubmitScoresPanel({
             </p>
           )}
 
+          {/* Substitution management */}
+          {!matchLoading && fullMatch && (
+            <div className="rounded-lg border border-border bg-surface-light p-4 space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-foreground/40">
+                Substitutions
+              </h3>
+
+              {/* Current subs */}
+              {(fullMatch.substitutions ?? []).length > 0 && (
+                <div className="grid gap-2">
+                  {fullMatch.substitutions.map((sub) => (
+                    <div
+                      key={sub.id}
+                      className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-2"
+                    >
+                      <div className="text-xs">
+                        <span className="text-foreground/40">
+                          {sub.team.name}:
+                        </span>{" "}
+                        <span className="text-foreground/60 line-through">
+                          {sub.originalBowler.name}
+                        </span>{" "}
+                        <span className="text-foreground/30">→</span>{" "}
+                        <span className="text-neon-amber font-medium">
+                          {sub.substituteBowler.name}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveSub(sub.id)}
+                        className="text-[10px] text-red-400 hover:text-red-300 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add sub form */}
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="flex-1 min-w-[100px]">
+                  <label className="block text-[10px] text-foreground/30 mb-1">
+                    Team
+                  </label>
+                  <select
+                    value={subTeamId}
+                    onChange={(e) => {
+                      setSubTeamId(e.target.value);
+                      setSubOriginalId("");
+                    }}
+                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-foreground/80"
+                  >
+                    <option value="">Select team...</option>
+                    <option value={fullMatch.homeTeamId}>
+                      {fullMatch.homeTeam.name}
+                    </option>
+                    <option value={fullMatch.awayTeamId}>
+                      {fullMatch.awayTeam.name}
+                    </option>
+                  </select>
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <label className="block text-[10px] text-foreground/30 mb-1">
+                    Original Bowler
+                  </label>
+                  <select
+                    value={subOriginalId}
+                    onChange={(e) => setSubOriginalId(e.target.value)}
+                    disabled={!subTeamId}
+                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-foreground/80 disabled:opacity-40"
+                  >
+                    <option value="">Select bowler...</option>
+                    {teamBowlersForSub.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <label className="block text-[10px] text-foreground/30 mb-1">
+                    Substitute
+                  </label>
+                  <select
+                    value={subSubstituteId}
+                    onChange={(e) => setSubSubstituteId(e.target.value)}
+                    disabled={!subOriginalId}
+                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-foreground/80 disabled:opacity-40"
+                  >
+                    <option value="">Select sub...</option>
+                    {availableSubs.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={handleAddSub}
+                  disabled={
+                    subSaving ||
+                    !subOriginalId ||
+                    !subSubstituteId ||
+                    !subTeamId
+                  }
+                  className="rounded-md border border-neon-amber/40 bg-neon-amber/10 px-3 py-1.5 text-xs font-medium text-neon-amber transition-all hover:bg-neon-amber/20 disabled:opacity-40"
+                >
+                  {subSaving ? "..." : "+ Add"}
+                </button>
+              </div>
+              {subError && (
+                <p className="text-[10px] text-red-400">{subError}</p>
+              )}
+            </div>
+          )}
+
+          {/* Game selector tabs */}
+          {!matchLoading && fullMatch && (
+            <div className="flex gap-2">
+              {[1, 2, 3].map((gn) => (
+                <button
+                  key={gn}
+                  onClick={() => {
+                    setSelectedGameNumber(gn);
+                    setAnalysisResult(null);
+                    setEditableBowlers(null);
+                    setUploadError(null);
+                  }}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-all duration-200 ${
+                    selectedGameNumber === gn
+                      ? "border-neon-amber bg-neon-amber/15 text-neon-amber"
+                      : "border-border text-foreground/40 hover:border-foreground/30"
+                  }`}
+                >
+                  Game {gn}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Existing scores — show with re-scan option */}
           {!matchLoading && hasExistingScores && !editableBowlers && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-foreground/60 uppercase tracking-widest">
-                  Current Scores
+                  Game {selectedGameNumber} Scores
                 </h3>
                 <label className="cursor-pointer rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-3 py-1.5 text-xs font-medium text-neon-amber transition-all hover:bg-neon-amber/20">
                   Re-scan Scorecard
@@ -284,10 +503,11 @@ function SubmitScoresPanel({
                 </label>
               </div>
               <p className="text-[10px] text-foreground/30">
-                ⚠ Re-scanning will overwrite existing scores
+                ⚠ Re-scanning will overwrite existing scores for Game{" "}
+                {selectedGameNumber}
               </p>
               <BowlingScoreboard
-                frames={fullMatch!.frames}
+                frames={selectedGame!.frames}
                 bowlers={matchBowlers}
               />
             </div>
@@ -300,12 +520,12 @@ function SubmitScoresPanel({
             !analyzing && (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface py-12 gap-4">
                 <p className="text-sm text-foreground/40">
-                  No scores recorded yet
+                  No scores for Game {selectedGameNumber}
                 </p>
                 <p className="text-xs text-foreground/30 max-w-xs text-center">
                   Take a photo of the full scorecard or upload an image
                 </p>
-                <label className="cursor-pointer rounded-lg border border-neon-cyan/60 bg-neon-cyan/10 px-5 py-2.5 text-sm font-medium text-neon-cyan transition-all hover:bg-neon-cyan/20 glow-cyan">
+                <label className="cursor-pointer rounded-lg border border-neon-amber/60 bg-neon-amber/10 px-5 py-2.5 text-sm font-medium text-neon-amber transition-all hover:bg-neon-amber/20">
                   📷 Upload Scorecard
                   <input
                     ref={fileInputRef}
@@ -322,8 +542,8 @@ function SubmitScoresPanel({
           {/* Analyzing spinner */}
           {analyzing && (
             <div className="flex flex-col items-center justify-center py-12 gap-3">
-              <div className="w-8 h-8 border-2 border-neon-cyan/30 border-t-neon-cyan rounded-full animate-spin" />
-              <p className="text-sm text-neon-cyan animate-pulse">
+              <div className="w-8 h-8 border-2 border-neon-amber/30 border-t-neon-amber rounded-full animate-spin" />
+              <p className="text-sm text-neon-amber animate-pulse">
                 Analyzing scorecard…
               </p>
               <p className="text-xs text-foreground/30">

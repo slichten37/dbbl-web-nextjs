@@ -14,8 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "dbbl",
+  title: "DBBL",
   description: "",
+  icons: {
+    icon: "/bowling.png",
+  },
 };
 
 export default function RootLayout({

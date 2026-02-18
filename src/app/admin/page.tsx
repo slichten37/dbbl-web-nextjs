@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { TabNavigator } from "@/components/ui";
 import { NeonButton, NeonInput } from "@/components/ui";
-import { BowlersTab, SeasonsTab, TeamsTab, MatchesTab } from "./tabs";
+import {
+  BowlersTab,
+  SeasonsTab,
+  TeamsTab,
+  MatchesTab,
+  ScoresTab,
+} from "./tabs";
 
 const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "yesIGeeb";
 
@@ -12,6 +18,7 @@ const tabs = [
   { key: "teams", label: "Teams" },
   { key: "bowlers", label: "Bowlers" },
   { key: "matches", label: "Matches" },
+  { key: "scores", label: "Scores" },
 ];
 
 const tabPanels: Record<string, React.ReactNode> = {
@@ -19,6 +26,7 @@ const tabPanels: Record<string, React.ReactNode> = {
   teams: <TeamsTab />,
   bowlers: <BowlersTab />,
   matches: <MatchesTab />,
+  scores: <ScoresTab />,
 };
 
 export default function AdminPage() {

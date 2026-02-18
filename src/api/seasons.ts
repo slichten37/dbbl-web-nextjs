@@ -9,13 +9,11 @@ export interface SeasonTeam {
 export interface SeasonMatch {
   id: string;
   week: number;
-  team1: { id: string; name: string };
-  team2: { id: string; name: string };
+  homeTeam: { id: string; name: string };
+  awayTeam: { id: string; name: string };
   winningTeamId: string | null;
-  team1Score: number | null;
-  team2Score: number | null;
-  team1Strikes: number | null;
-  team2Strikes: number | null;
+  homeTeamPoints: number | null;
+  awayTeamPoints: number | null;
 }
 
 export interface Season {
