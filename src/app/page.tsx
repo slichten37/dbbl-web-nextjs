@@ -174,12 +174,6 @@ function SchedulePanel({
     }
   }, [weeks, selectedWeek]);
 
-  if (matches.length === 0) {
-    return (
-      <p className="text-foreground/40 text-sm">No schedule generated yet.</p>
-    );
-  }
-
   const filtered = matches.filter((m) => m.week === selectedWeek);
 
   // Find the team with a bye this week (if odd number of teams)
@@ -190,6 +184,12 @@ function SchedulePanel({
     );
     return teams.find((t) => !playingIds.has(t.id)) ?? null;
   }, [teams, filtered]);
+
+  if (matches.length === 0) {
+    return (
+      <p className="text-foreground/40 text-sm">No schedule generated yet.</p>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -312,22 +312,6 @@ function ScoresPanel({
     }
   }, []);
 
-  if (matches.length === 0) {
-    return (
-      <p className="text-foreground/40 text-sm">No matches in this season.</p>
-    );
-  }
-
-  const filteredMatches = matches.filter((m) => m.week === selectedWeek);
-  const hasScores =
-    fullMatch &&
-    fullMatch.games &&
-    fullMatch.games.some((g) => g.frames.length > 0);
-
-  const selectedGame: MatchGame | undefined = fullMatch?.games?.find(
-    (g) => g.gameNumber === selectedGameNumber,
-  );
-
   const matchBowlers = useMemo(() => {
     if (!fullMatch) return [];
     const subMap = new Map<string, { id: string; name: string }>();
@@ -346,6 +330,22 @@ function ScoresPanel({
       ...fullMatch.awayTeam.bowlers.map(mapBowler),
     ];
   }, [fullMatch]);
+
+  if (matches.length === 0) {
+    return (
+      <p className="text-foreground/40 text-sm">No matches in this season.</p>
+    );
+  }
+
+  const filteredMatches = matches.filter((m) => m.week === selectedWeek);
+  const hasScores =
+    fullMatch &&
+    fullMatch.games &&
+    fullMatch.games.some((g) => g.frames.length > 0);
+
+  const selectedGame: MatchGame | undefined = fullMatch?.games?.find(
+    (g) => g.gameNumber === selectedGameNumber,
+  );
 
   return (
     <div className="space-y-4">

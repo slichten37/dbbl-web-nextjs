@@ -178,19 +178,6 @@ function SubmitScoresPanel({
     setUploadError(null);
   };
 
-  if (matches.length === 0) {
-    return (
-      <p className="text-foreground/40 text-sm">No matches in this season.</p>
-    );
-  }
-
-  const filteredMatches = matches.filter((m) => m.week === selectedWeek);
-
-  const selectedGame: MatchGame | undefined = fullMatch?.games?.find(
-    (g) => g.gameNumber === selectedGameNumber,
-  );
-  const hasExistingScores = selectedGame && selectedGame.frames.length > 0;
-
   const matchBowlers = useMemo(() => {
     if (!fullMatch) return [];
     const subMap = new Map<string, { id: string; name: string }>();
@@ -271,6 +258,19 @@ function SubmitScoresPanel({
       setSubError("Failed to remove substitution.");
     }
   };
+
+  if (matches.length === 0) {
+    return (
+      <p className="text-foreground/40 text-sm">No matches in this season.</p>
+    );
+  }
+
+  const filteredMatches = matches.filter((m) => m.week === selectedWeek);
+
+  const selectedGame: MatchGame | undefined = fullMatch?.games?.find(
+    (g) => g.gameNumber === selectedGameNumber,
+  );
+  const hasExistingScores = selectedGame && selectedGame.frames.length > 0;
 
   return (
     <div className="space-y-4">
