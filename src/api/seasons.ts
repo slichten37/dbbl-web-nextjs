@@ -62,3 +62,48 @@ export async function generateSchedule(id: string): Promise<Season> {
   const res = await api.post<Season>(`/seasons/${id}/generate-schedule`);
   return res.data;
 }
+
+// ============================================================================
+// Stats types
+// ============================================================================
+
+export interface BowlerStats {
+  id: string;
+  name: string;
+  pins: number;
+  strikes: number;
+  spares: number;
+  gutters: number;
+}
+
+export interface TeamStats {
+  id: string;
+  name: string;
+  matchWins: number;
+  gameWins: number;
+  pins: number;
+  pinsAgainst: number;
+  strikes: number;
+  spares: number;
+  gutters: number;
+}
+
+export interface SeasonStats {
+  bowlers: BowlerStats[];
+  teams: TeamStats[];
+}
+
+export async function getSeasonStats(id: string): Promise<SeasonStats> {
+  const res = await api.get<SeasonStats>(`/seasons/${id}/stats`);
+  return res.data;
+}
+
+export async function autoFillWeek(
+  seasonId: string,
+  week: number,
+): Promise<Season> {
+  const res = await api.post<Season>(`/seasons/${seasonId}/auto-fill-week`, {
+    week,
+  });
+  return res.data;
+}

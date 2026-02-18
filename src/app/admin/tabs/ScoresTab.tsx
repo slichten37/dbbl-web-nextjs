@@ -6,6 +6,7 @@ import {
   SeasonMatch,
   SeasonTeam,
   getActiveSeason,
+  autoFillWeek,
 } from "@/api/seasons";
 import {
   Match,
@@ -49,13 +50,21 @@ export default function ScoresTab() {
     );
   }
 
-  return <SubmitScoresPanel matches={season.matches} teams={season.teams} />;
+  return (
+    <SubmitScoresPanel
+      seasonId={season.id}
+      matches={season.matches}
+      teams={season.teams}
+    />
+  );
 }
 
 function SubmitScoresPanel({
+  seasonId,
   matches,
   teams,
 }: {
+  seasonId: string;
   matches: SeasonMatch[];
   teams: SeasonTeam[];
 }) {
@@ -82,6 +91,10 @@ function SubmitScoresPanel({
   const [subSubstituteId, setSubSubstituteId] = useState<string>("");
   const [subSaving, setSubSaving] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
+
+  // ---- Auto-fill ----
+  const [autoFilling, setAutoFilling] = useState(false);
+  const [autoFillError, setAutoFillError] = useState<string | null>(null);
 
   // ---- Upload & analysis ----
   const [analysisResult, setAnalysisResult] =
@@ -300,24 +313,64 @@ function SubmitScoresPanel({
 
       {/* Match selector */}
       {!selectedMatchId && (
-        <div className="grid gap-3">
-          {filteredMatches.map((match) => (
-            <button
-              key={match.id}
-              onClick={() => loadMatch(match.id)}
-              className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-4 py-3 transition-all hover:border-neon-amber/40 hover:bg-surface-light/80"
-            >
-              <span className="flex-1 text-sm font-medium text-neon-magenta">
-                {match.homeTeam.name}
-              </span>
-              <span className="text-xs text-foreground/30 uppercase tracking-widest">
-                vs
-              </span>
-              <span className="flex-1 text-right text-sm font-medium text-neon-cyan">
-                {match.awayTeam.name}
-              </span>
-            </button>
-          ))}
+        <div className="space-y-4">
+          <div className="grid gap-3">
+            {filteredMatches.map((match) => (
+              <button
+                key={match.id}
+                onClick={() => loadMatch(match.id)}
+                className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-4 py-3 transition-all hover:border-neon-amber/40 hover:bg-surface-light/80"
+              >
+                <span className="flex-1 text-sm font-medium text-neon-magenta">
+                  {match.homeTeam.name}
+                </span>
+                <span className="text-xs text-foreground/30 uppercase tracking-widest">
+                  vs
+                </span>
+                <span className="flex-1 text-right text-sm font-medium text-neon-cyan">
+                  {match.awayTeam.name}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Auto-fill week button */}
+          {selectedWeek !== null && (
+            <div className="flex flex-col items-center gap-2 pt-2">
+              <button
+                onClick={async () => {
+                  setAutoFilling(true);
+                  setAutoFillError(null);
+                  try {
+                    await autoFillWeek(seasonId, selectedWeek);
+                    // Reload page to reflect new scores
+                    window.location.reload();
+                  } catch {
+                    setAutoFillError("Failed to auto-fill scores.");
+                  } finally {
+                    setAutoFilling(false);
+                  }
+                }}
+                disabled={autoFilling}
+                className="rounded-lg border border-neon-magenta/40 bg-neon-magenta/10 px-5 py-2 text-xs font-medium text-neon-magenta transition-all hover:bg-neon-magenta/20 disabled:opacity-40"
+              >
+                {autoFilling ? (
+                  <span className="flex items-center gap-2">
+                    <span className="inline-block w-3 h-3 border-2 border-neon-magenta/30 border-t-neon-magenta rounded-full animate-spin" />
+                    Auto-filling…
+                  </span>
+                ) : (
+                  "🎲 Auto-Fill Week " + selectedWeek
+                )}
+              </button>
+              <p className="text-[10px] text-foreground/30">
+                Generates random scores for all matches this week
+              </p>
+              {autoFillError && (
+                <p className="text-[10px] text-red-400">{autoFillError}</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
