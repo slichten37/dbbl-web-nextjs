@@ -1,39 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Match,
-  getMatches /* createMatch, updateMatch */,
-} from "@/api/matches";
-// import { Team, getTeams } from "@/api/teams";
-// import { Season, getSeasons } from "@/api/seasons";
-// import { NeonButton, NeonInput, NeonSelect } from "@/components/ui";
+import { Match, getMatches, updateMatch } from "@/api/matches";
 
 export default function MatchesTab() {
   const [matches, setMatches] = useState<Match[]>([]);
-  // const [allTeams, setAllTeams] = useState<Team[]>([]);
-  // const [allSeasons, setAllSeasons] = useState<Season[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // const [team1Id, setTeam1Id] = useState("");
-  // const [team2Id, setTeam2Id] = useState("");
-  // const [seasonId, setSeasonId] = useState("");
-  // const [week, setWeek] = useState("");
-  // const [editingId, setEditingId] = useState<string | null>(null);
-  // const [saving, setSaving] = useState(false);
   const [filterWeek, setFilterWeek] = useState<number | null>(null);
+
+  // Editing state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editHome, setEditHome] = useState("");
+  const [editAway, setEditAway] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [matchesData] = await Promise.all([
-        getMatches(),
-        // getTeams(),
-        // getSeasons(),
-      ]);
+      const matchesData = await getMatches();
       setMatches(matchesData);
-      // setAllTeams(teamsData);
-      // setAllSeasons(seasonsData);
     } finally {
       setLoading(false);
     }
@@ -43,110 +28,51 @@ export default function MatchesTab() {
     load();
   }, []);
 
-  // const resetForm = () => {
-  //   setTeam1Id("");
-  //   setTeam2Id("");
-  //   setSeasonId("");
-  //   setWeek("");
-  //   setEditingId(null);
-  // };
+  const startEdit = (match: Match) => {
+    setEditingId(match.id);
+    setEditHome(
+      match.homeTeamPoints != null ? String(match.homeTeamPoints) : "",
+    );
+    setEditAway(
+      match.awayTeamPoints != null ? String(match.awayTeamPoints) : "",
+    );
+  };
 
-  // const handleSubmit = async (e: React.FormEvent) => {
-  //   e.preventDefault();
-  //   if (!team1Id || !team2Id || !seasonId || !week) return;
-  //   setSaving(true);
-  //   try {
-  //     const data = {
-  //       homeTeamId: team1Id,
-  //       awayTeamId: team2Id,
-  //       seasonId,
-  //       week: parseInt(week, 10),
-  //     };
-  //     if (editingId) {
-  //       await updateMatch(editingId, data);
-  //     } else {
-  //       await createMatch(data);
-  //     }
-  //     resetForm();
-  //     await load();
-  //   } finally {
-  //     setSaving(false);
-  //   }
-  // };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditHome("");
+    setEditAway("");
+  };
 
-  // const startEdit = (match: Match) => {
-  //   setEditingId(match.id);
-  //   setTeam1Id(match.homeTeamId);
-  //   setTeam2Id(match.awayTeamId);
-  //   setSeasonId(match.seasonId);
-  //   setWeek(String(match.week));
-  // };
+  const handleSavePoints = async (match: Match) => {
+    const homePoints = editHome === "" ? null : parseInt(editHome, 10);
+    const awayPoints = editAway === "" ? null : parseInt(editAway, 10);
 
-  // const teamOptions = allTeams.map((t) => ({ value: t.id, label: t.name }));
-  // const seasonOptions = allSeasons.map((s) => ({ value: s.id, label: s.name }));
+    if (editHome !== "" && isNaN(homePoints!)) return;
+    if (editAway !== "" && isNaN(awayPoints!)) return;
 
-  // const isValid = team1Id && team2Id && seasonId && week && team1Id !== team2Id;
+    let winningTeamId: string | null = null;
+    if (homePoints != null && awayPoints != null) {
+      if (homePoints > awayPoints) winningTeamId = match.homeTeamId;
+      else if (awayPoints > homePoints) winningTeamId = match.awayTeamId;
+    }
+
+    setSaving(true);
+    try {
+      await updateMatch(match.id, {
+        homeTeamPoints: homePoints,
+        awayTeamPoints: awayPoints,
+        winningTeamId,
+      });
+      await load();
+      cancelEdit();
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <NeonSelect
-            variant="amber"
-            label="Team 1"
-            id="match-team1"
-            options={teamOptions}
-            placeholder="Select team 1..."
-            value={team1Id}
-            onChange={(e) => setTeam1Id(e.target.value)}
-          />
-          <NeonSelect
-            variant="amber"
-            label="Team 2"
-            id="match-team2"
-            options={teamOptions}
-            placeholder="Select team 2..."
-            value={team2Id}
-            onChange={(e) => setTeam2Id(e.target.value)}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <NeonSelect
-            variant="amber"
-            label="Season"
-            id="match-season"
-            options={seasonOptions}
-            placeholder="Select season..."
-            value={seasonId}
-            onChange={(e) => setSeasonId(e.target.value)}
-          />
-          <NeonInput
-            variant="amber"
-            label="Week"
-            id="match-week"
-            type="number"
-            min={1}
-            placeholder="1"
-            value={week}
-            onChange={(e) => setWeek(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-3">
-          <NeonButton
-            type="submit"
-            variant="amber"
-            disabled={saving || !isValid}
-          >
-            {saving ? "Saving..." : editingId ? "Update Match" : "Add Match"}
-          </NeonButton>
-          {editingId && (
-            <NeonButton type="button" variant="magenta" onClick={resetForm}>
-              Cancel
-            </NeonButton>
-          )}
-        </div>
-      </form> */}
-
       {!loading &&
         matches.length > 0 &&
         (() => {
@@ -200,32 +126,109 @@ export default function MatchesTab() {
         <div className="grid gap-3">
           {matches
             .filter((m) => filterWeek === null || m.week === filterWeek)
-            .map((match) => (
-              <div
-                key={match.id}
-                className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-4 py-3"
-              >
-                <div>
-                  <p className="text-sm font-medium">
-                    <span className="text-neon-cyan">
-                      {match.homeTeam.name}
-                    </span>
-                    <span className="text-foreground/40 mx-2">vs</span>
-                    <span className="text-neon-magenta">
-                      {match.awayTeam.name}
-                    </span>
-                  </p>
-                  <p className="text-xs text-foreground/40 mt-0.5">
-                    {match.season.name} · Week {match.week} ·{" "}
-                    {match.games.length} game
-                    {match.games.length !== 1 ? "s" : ""} scored
-                  </p>
+            .map((match) => {
+              const isEditing = editingId === match.id;
+              return (
+                <div
+                  key={match.id}
+                  className="rounded-lg border border-border bg-surface-light px-4 py-3 space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">
+                        <span className="text-neon-cyan">
+                          {match.homeTeam.name}
+                        </span>
+                        <span className="text-foreground/40 mx-2">vs</span>
+                        <span className="text-neon-magenta">
+                          {match.awayTeam.name}
+                        </span>
+                      </p>
+                      <p className="text-xs text-foreground/40 mt-0.5">
+                        {match.season.name} · Week {match.week} ·{" "}
+                        {match.games.length} game
+                        {match.games.length !== 1 ? "s" : ""} scored
+                      </p>
+                    </div>
+                    {!isEditing && (
+                      <button
+                        onClick={() => startEdit(match)}
+                        className="rounded-md border border-neon-amber/40 bg-neon-amber/10 px-3 py-1.5 text-xs font-medium text-neon-amber transition-all hover:bg-neon-amber/20"
+                      >
+                        Edit Points
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Current points display */}
+                  {!isEditing &&
+                    (match.homeTeamPoints != null ||
+                      match.awayTeamPoints != null) && (
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="text-foreground/40">Points:</span>
+                        <span className="text-neon-cyan font-medium">
+                          {match.homeTeam.name} {match.homeTeamPoints ?? "—"}
+                        </span>
+                        <span className="text-foreground/30">–</span>
+                        <span className="text-neon-magenta font-medium">
+                          {match.awayTeamPoints ?? "—"} {match.awayTeam.name}
+                        </span>
+                        {match.winningTeamId && (
+                          <span className="rounded-full border border-neon-lime/30 bg-neon-lime/10 px-2 py-0.5 text-[10px] text-neon-lime">
+                            Winner:{" "}
+                            {match.winningTeamId === match.homeTeamId
+                              ? match.homeTeam.name
+                              : match.awayTeam.name}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                  {/* Inline edit form */}
+                  {isEditing && (
+                    <div className="flex flex-wrap items-end gap-3 pt-1">
+                      <div className="min-w-[100px]">
+                        <label className="block text-[10px] text-foreground/30 mb-1">
+                          {match.homeTeam.name} pts
+                        </label>
+                        <input
+                          type="number"
+                          value={editHome}
+                          onChange={(e) => setEditHome(e.target.value)}
+                          className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-foreground/80 tabular-nums"
+                          placeholder="—"
+                        />
+                      </div>
+                      <div className="min-w-[100px]">
+                        <label className="block text-[10px] text-foreground/30 mb-1">
+                          {match.awayTeam.name} pts
+                        </label>
+                        <input
+                          type="number"
+                          value={editAway}
+                          onChange={(e) => setEditAway(e.target.value)}
+                          className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-foreground/80 tabular-nums"
+                          placeholder="—"
+                        />
+                      </div>
+                      <button
+                        onClick={() => handleSavePoints(match)}
+                        disabled={saving}
+                        className="rounded-md border border-neon-lime/40 bg-neon-lime/10 px-3 py-1.5 text-xs font-medium text-neon-lime transition-all hover:bg-neon-lime/20 disabled:opacity-40"
+                      >
+                        {saving ? "Saving…" : "Save"}
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground/40 transition-all hover:border-foreground/30 hover:text-foreground/60"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {/* <NeonButton variant="amber" onClick={() => startEdit(match)}>
-                Edit
-              </NeonButton> */}
-              </div>
-            ))}
+              );
+            })}
         </div>
       )}
     </div>

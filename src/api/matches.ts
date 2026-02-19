@@ -127,6 +127,9 @@ export async function updateMatch(
     awayTeamId?: string;
     seasonId?: string;
     week?: number;
+    homeTeamPoints?: number | null;
+    awayTeamPoints?: number | null;
+    winningTeamId?: string | null;
   },
 ): Promise<Match> {
   const res = await api.patch<Match>(`/matches/${id}`, data);

@@ -70,22 +70,28 @@ export async function generateSchedule(id: string): Promise<Season> {
 export interface BowlerStats {
   id: string;
   name: string;
-  pins: number;
-  strikes: number;
-  spares: number;
-  gutters: number;
+  gamesPlayed: number;
+  ppg: number;
+  spg: number;
+  sparespg: number;
+  gpg: number;
 }
 
 export interface TeamStats {
   id: string;
   name: string;
   matchWins: number;
+  matchLosses: number;
+  matchTies: number;
   gameWins: number;
-  pins: number;
-  pinsAgainst: number;
-  strikes: number;
-  spares: number;
-  gutters: number;
+  gameLosses: number;
+  gameTies: number;
+  gamesPlayed: number;
+  ppg: number;
+  oppg: number;
+  spg: number;
+  sparespg: number;
+  gpg: number;
 }
 
 export interface SeasonStats {

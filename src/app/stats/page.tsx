@@ -67,27 +67,31 @@ function SortHeader({
 
 type TeamSortKey =
   | "name"
-  | "matchWins"
-  | "gameWins"
-  | "pins"
-  | "pinsAgainst"
-  | "strikes"
-  | "spares"
-  | "gutters";
+  | "matchRecord"
+  | "gameRecord"
+  | "ppg"
+  | "oppg"
+  | "spg"
+  | "sparespg"
+  | "gpg";
 
 const teamColumns: { key: TeamSortKey; label: string }[] = [
   { key: "name", label: "Team" },
-  { key: "matchWins", label: "Match W" },
-  { key: "gameWins", label: "Game W" },
-  { key: "pins", label: "Pins" },
-  { key: "pinsAgainst", label: "Pins Against" },
-  { key: "strikes", label: "Strikes" },
-  { key: "spares", label: "Spares" },
-  { key: "gutters", label: "Gutters" },
+  { key: "matchRecord", label: "Match" },
+  { key: "gameRecord", label: "Game" },
+  { key: "ppg", label: "PPG" },
+  { key: "oppg", label: "OPPG" },
+  { key: "spg", label: "SPG" },
+  { key: "sparespg", label: "Spares/G" },
+  { key: "gpg", label: "Gutters/G" },
 ];
 
+function formatRecord(w: number, l: number, t: number): string {
+  return t > 0 ? `${w}-${l}-${t}` : `${w}-${l}`;
+}
+
 function TeamsStatsTable({ teams }: { teams: TeamStats[] }) {
-  const [sortKey, setSortKey] = useState<TeamSortKey>("matchWins");
+  const [sortKey, setSortKey] = useState<TeamSortKey>("matchRecord");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const handleSort = (key: string) => {
@@ -102,6 +106,15 @@ function TeamsStatsTable({ teams }: { teams: TeamStats[] }) {
 
   const sorted = useMemo(() => {
     return [...teams].sort((a, b) => {
+      if (sortKey === "matchRecord") {
+        const diff =
+          a.matchWins - a.matchLosses - (b.matchWins - b.matchLosses);
+        return sortDir === "asc" ? diff : -diff;
+      }
+      if (sortKey === "gameRecord") {
+        const diff = a.gameWins - a.gameLosses - (b.gameWins - b.gameLosses);
+        return sortDir === "asc" ? diff : -diff;
+      }
       const aVal = a[sortKey];
       const bVal = b[sortKey];
       if (typeof aVal === "string" && typeof bVal === "string") {
@@ -153,25 +166,29 @@ function TeamsStatsTable({ teams }: { teams: TeamStats[] }) {
                   {team.name}
                 </td>
                 <td className="px-3 py-2.5 text-center text-foreground/80 tabular-nums">
-                  {team.matchWins}
+                  {formatRecord(
+                    team.matchWins,
+                    team.matchLosses,
+                    team.matchTies,
+                  )}
                 </td>
                 <td className="px-3 py-2.5 text-center text-foreground/80 tabular-nums">
-                  {team.gameWins}
+                  {formatRecord(team.gameWins, team.gameLosses, team.gameTies)}
                 </td>
                 <td className="px-3 py-2.5 text-center text-foreground/80 tabular-nums">
-                  {team.pins.toLocaleString()}
+                  {team.ppg.toFixed(1)}
                 </td>
                 <td className="px-3 py-2.5 text-center text-foreground/80 tabular-nums">
-                  {team.pinsAgainst.toLocaleString()}
+                  {team.oppg.toFixed(1)}
                 </td>
                 <td className="px-3 py-2.5 text-center text-foreground/80 tabular-nums">
-                  {team.strikes}
+                  {team.spg.toFixed(2)}
                 </td>
                 <td className="px-3 py-2.5 text-center text-foreground/80 tabular-nums">
-                  {team.spares}
+                  {team.sparespg.toFixed(2)}
                 </td>
                 <td className="px-3 py-2.5 text-center text-foreground/80 tabular-nums">
-                  {team.gutters}
+                  {team.gpg.toFixed(2)}
                 </td>
               </tr>
             ))}
@@ -186,18 +203,18 @@ function TeamsStatsTable({ teams }: { teams: TeamStats[] }) {
 // Bowlers stats table
 // ============================================================================
 
-type BowlerSortKey = "name" | "pins" | "strikes" | "spares" | "gutters";
+type BowlerSortKey = "name" | "ppg" | "spg" | "sparespg" | "gpg";
 
 const bowlerColumns: { key: BowlerSortKey; label: string }[] = [
   { key: "name", label: "Bowler" },
-  { key: "pins", label: "Pins" },
-  { key: "strikes", label: "Strikes" },
-  { key: "spares", label: "Spares" },
-  { key: "gutters", label: "Gutters" },
+  { key: "ppg", label: "PPG" },
+  { key: "spg", label: "SPG" },
+  { key: "sparespg", label: "Spares/G" },
+  { key: "gpg", label: "Gutters/G" },
 ];
 
 function BowlersStatsTable({ bowlers }: { bowlers: BowlerStats[] }) {
-  const [sortKey, setSortKey] = useState<BowlerSortKey>("pins");
+  const [sortKey, setSortKey] = useState<BowlerSortKey>("ppg");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const handleSort = (key: string) => {
@@ -263,16 +280,16 @@ function BowlersStatsTable({ bowlers }: { bowlers: BowlerStats[] }) {
                   {bowler.name}
                 </td>
                 <td className="px-3 py-2.5 text-center text-foreground/80 tabular-nums">
-                  {bowler.pins.toLocaleString()}
+                  {bowler.ppg.toFixed(1)}
                 </td>
                 <td className="px-3 py-2.5 text-center text-foreground/80 tabular-nums">
-                  {bowler.strikes}
+                  {bowler.spg.toFixed(2)}
                 </td>
                 <td className="px-3 py-2.5 text-center text-foreground/80 tabular-nums">
-                  {bowler.spares}
+                  {bowler.sparespg.toFixed(2)}
                 </td>
                 <td className="px-3 py-2.5 text-center text-foreground/80 tabular-nums">
-                  {bowler.gutters}
+                  {bowler.gpg.toFixed(2)}
                 </td>
               </tr>
             ))}
