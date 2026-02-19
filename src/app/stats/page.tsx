@@ -67,6 +67,7 @@ function SortHeader({
 
 type TeamSortKey =
   | "name"
+  | "totalPoints"
   | "matchRecord"
   | "gameRecord"
   | "ppg"
@@ -77,6 +78,7 @@ type TeamSortKey =
 
 const teamColumns: { key: TeamSortKey; label: string }[] = [
   { key: "name", label: "Team" },
+  { key: "totalPoints", label: "Points" },
   { key: "matchRecord", label: "Match" },
   { key: "gameRecord", label: "Game" },
   { key: "ppg", label: "PPG" },
@@ -91,7 +93,7 @@ function formatRecord(w: number, l: number, t: number): string {
 }
 
 function TeamsStatsTable({ teams }: { teams: TeamStats[] }) {
-  const [sortKey, setSortKey] = useState<TeamSortKey>("matchRecord");
+  const [sortKey, setSortKey] = useState<TeamSortKey>("totalPoints");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const handleSort = (key: string) => {
@@ -164,6 +166,9 @@ function TeamsStatsTable({ teams }: { teams: TeamStats[] }) {
               >
                 <td className="px-4 py-2.5 min-w-[120px] text-xs font-bold text-neon-cyan">
                   {team.name}
+                </td>
+                <td className="px-3 py-2.5 text-center text-neon-amber font-bold tabular-nums">
+                  {team.totalPoints}
                 </td>
                 <td className="px-3 py-2.5 text-center text-foreground/80 tabular-nums">
                   {formatRecord(

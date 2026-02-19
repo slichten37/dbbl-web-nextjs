@@ -80,6 +80,7 @@ export interface BowlerStats {
 export interface TeamStats {
   id: string;
   name: string;
+  totalPoints: number;
   matchWins: number;
   matchLosses: number;
   matchTies: number;
