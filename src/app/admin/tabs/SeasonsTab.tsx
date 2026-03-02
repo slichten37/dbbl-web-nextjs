@@ -210,9 +210,9 @@ export default function SeasonsTab() {
       ) : (
         <div className="grid gap-3">
           {seasons.map((season) => {
-            const weeks = [
-              ...new Set(season.matches.map((m) => m.week)),
-            ].sort((a, b) => a - b);
+            const weeks = [...new Set(season.matches.map((m) => m.week))].sort(
+              (a, b) => a - b,
+            );
             const weekOptions = weeks.map((w) => ({
               value: String(w),
               label: `Week ${w}`,
@@ -249,9 +249,7 @@ export default function SeasonsTab() {
                       season.teams.length >= 2 && (
                         <NeonButton
                           variant="lime"
-                          onClick={() =>
-                            handleGenerateSchedule(season.id)
-                          }
+                          onClick={() => handleGenerateSchedule(season.id)}
                           disabled={generatingId === season.id}
                         >
                           {generatingId === season.id
