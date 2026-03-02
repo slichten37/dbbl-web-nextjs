@@ -114,3 +114,15 @@ export async function autoFillWeek(
   });
   return res.data;
 }
+
+export async function switchWeeks(
+  seasonId: string,
+  weekA: number,
+  weekB: number,
+): Promise<Season> {
+  const res = await api.post<Season>(`/seasons/${seasonId}/switch-weeks`, {
+    weekA,
+    weekB,
+  });
+  return res.data;
+}

@@ -7,9 +7,10 @@ import {
   createSeason,
   updateSeason,
   generateSchedule,
+  switchWeeks,
 } from "@/api/seasons";
 import { Team, getTeams } from "@/api/teams";
-import { NeonButton, NeonInput } from "@/components/ui";
+import { NeonButton, NeonInput, NeonSelect } from "@/components/ui";
 
 export default function SeasonsTab() {
   const [seasons, setSeasons] = useState<Season[]>([]);
@@ -21,6 +22,12 @@ export default function SeasonsTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [switchingSeasonId, setSwitchingSeasonId] = useState<string | null>(
+    null,
+  );
+  const [switchWeekA, setSwitchWeekA] = useState("");
+  const [switchWeekB, setSwitchWeekB] = useState("");
+  const [swapping, setSwapping] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -100,6 +107,34 @@ export default function SeasonsTab() {
     }
   };
 
+  const toggleSwitchWeeks = (seasonId: string) => {
+    if (switchingSeasonId === seasonId) {
+      setSwitchingSeasonId(null);
+      setSwitchWeekA("");
+      setSwitchWeekB("");
+    } else {
+      setSwitchingSeasonId(seasonId);
+      setSwitchWeekA("");
+      setSwitchWeekB("");
+    }
+  };
+
+  const handleSwitchWeeks = async (seasonId: string) => {
+    if (!switchWeekA || !switchWeekB) return;
+    setSwapping(true);
+    try {
+      await switchWeeks(seasonId, Number(switchWeekA), Number(switchWeekB));
+      setSwitchingSeasonId(null);
+      setSwitchWeekA("");
+      setSwitchWeekB("");
+      await load();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Failed to switch weeks");
+    } finally {
+      setSwapping(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -174,49 +209,112 @@ export default function SeasonsTab() {
         </p>
       ) : (
         <div className="grid gap-3">
-          {seasons.map((season) => (
-            <div
-              key={season.id}
-              className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-4 py-3"
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-neon-magenta">
-                    {season.name}
-                  </p>
-                  {season.isActive && (
-                    <span className="rounded-full bg-neon-lime/15 border border-neon-lime px-2 py-0.5 text-[10px] font-bold text-neon-lime uppercase tracking-wider">
-                      Active
-                    </span>
-                  )}
+          {seasons.map((season) => {
+            const weeks = [
+              ...new Set(season.matches.map((m) => m.week)),
+            ].sort((a, b) => a - b);
+            const weekOptions = weeks.map((w) => ({
+              value: String(w),
+              label: `Week ${w}`,
+            }));
+
+            return (
+              <div
+                key={season.id}
+                className="rounded-lg border border-border bg-surface-light px-4 py-3 space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-neon-magenta">
+                        {season.name}
+                      </p>
+                      {season.isActive && (
+                        <span className="rounded-full bg-neon-lime/15 border border-neon-lime px-2 py-0.5 text-[10px] font-bold text-neon-lime uppercase tracking-wider">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-foreground/40 mt-0.5">
+                      {season.teams.length > 0
+                        ? season.teams.map((t) => t.name).join(", ")
+                        : "No teams"}
+                      {" · "}
+                      {season.matches.length} match
+                      {season.matches.length !== 1 ? "es" : ""}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    {season.matches.length === 0 &&
+                      season.teams.length >= 2 && (
+                        <NeonButton
+                          variant="lime"
+                          onClick={() =>
+                            handleGenerateSchedule(season.id)
+                          }
+                          disabled={generatingId === season.id}
+                        >
+                          {generatingId === season.id
+                            ? "Generating..."
+                            : "Generate Schedule"}
+                        </NeonButton>
+                      )}
+                    {weeks.length >= 2 && (
+                      <NeonButton
+                        variant="cyan"
+                        onClick={() => toggleSwitchWeeks(season.id)}
+                      >
+                        {switchingSeasonId === season.id
+                          ? "Cancel"
+                          : "Switch Weeks"}
+                      </NeonButton>
+                    )}
+                    <NeonButton
+                      variant="amber"
+                      onClick={() => startEdit(season)}
+                    >
+                      Edit
+                    </NeonButton>
+                  </div>
                 </div>
-                <p className="text-xs text-foreground/40 mt-0.5">
-                  {season.teams.length > 0
-                    ? season.teams.map((t) => t.name).join(", ")
-                    : "No teams"}
-                  {" · "}
-                  {season.matches.length} match
-                  {season.matches.length !== 1 ? "es" : ""}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                {season.matches.length === 0 && season.teams.length >= 2 && (
-                  <NeonButton
-                    variant="lime"
-                    onClick={() => handleGenerateSchedule(season.id)}
-                    disabled={generatingId === season.id}
-                  >
-                    {generatingId === season.id
-                      ? "Generating..."
-                      : "Generate Schedule"}
-                  </NeonButton>
+
+                {switchingSeasonId === season.id && (
+                  <div className="flex items-end gap-3 pt-1 border-t border-border">
+                    <NeonSelect
+                      variant="cyan"
+                      label="Week A"
+                      options={weekOptions}
+                      placeholder="Select week"
+                      value={switchWeekA}
+                      onChange={(e) => setSwitchWeekA(e.target.value)}
+                      id={`switch-week-a-${season.id}`}
+                    />
+                    <NeonSelect
+                      variant="cyan"
+                      label="Week B"
+                      options={weekOptions}
+                      placeholder="Select week"
+                      value={switchWeekB}
+                      onChange={(e) => setSwitchWeekB(e.target.value)}
+                      id={`switch-week-b-${season.id}`}
+                    />
+                    <NeonButton
+                      variant="lime"
+                      onClick={() => handleSwitchWeeks(season.id)}
+                      disabled={
+                        swapping ||
+                        !switchWeekA ||
+                        !switchWeekB ||
+                        switchWeekA === switchWeekB
+                      }
+                    >
+                      {swapping ? "Swapping..." : "Confirm Swap"}
+                    </NeonButton>
+                  </div>
                 )}
-                <NeonButton variant="amber" onClick={() => startEdit(season)}>
-                  Edit
-                </NeonButton>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
