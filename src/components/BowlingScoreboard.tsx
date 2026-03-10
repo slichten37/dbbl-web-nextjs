@@ -2,7 +2,11 @@
 
 import { useMemo, useState } from "react";
 import type { MatchFrame, MatchBowler } from "@/api/matches";
-import type { FrameData, BowlerFrameData, FrameCorrection } from "@/api/matches";
+import type {
+  FrameData,
+  BowlerFrameData,
+  FrameCorrection,
+} from "@/api/matches";
 
 // ============================================================================
 // Shared scoring helpers
@@ -76,9 +80,7 @@ function calculateRunningTotals(frames: ScoreFrame[]): (number | null)[] {
     } else {
       // Frame 10
       cumulative +=
-        frame.ball1Score +
-        (frame.ball2Score ?? 0) +
-        (frame.ball3Score ?? 0);
+        frame.ball1Score + (frame.ball2Score ?? 0) + (frame.ball3Score ?? 0);
     }
 
     totals.push(cumulative);
@@ -93,10 +95,18 @@ function calculateRunningTotals(frames: ScoreFrame[]): (number | null)[] {
 
 function ball1Display(f: ScoreFrame): string {
   if (f.frameNumber < 10) {
-    return f.ball1Score === 10 ? "X" : f.ball1Score === 0 ? "–" : String(f.ball1Score);
+    return f.ball1Score === 10
+      ? "X"
+      : f.ball1Score === 0
+        ? "–"
+        : String(f.ball1Score);
   }
   // Frame 10
-  return f.ball1Score === 10 ? "X" : f.ball1Score === 0 ? "–" : String(f.ball1Score);
+  return f.ball1Score === 10
+    ? "X"
+    : f.ball1Score === 0
+      ? "–"
+      : String(f.ball1Score);
 }
 
 function ball2Display(f: ScoreFrame): string {
@@ -108,7 +118,11 @@ function ball2Display(f: ScoreFrame): string {
   // Frame 10
   if (f.ball1Score === 10) {
     // After a strike in the 10th, ball2 is an independent ball
-    return f.ball2Score === 10 ? "X" : f.ball2Score === 0 ? "–" : String(f.ball2Score);
+    return f.ball2Score === 10
+      ? "X"
+      : f.ball2Score === 0
+        ? "–"
+        : String(f.ball2Score);
   }
   if (f.ball1Score + f.ball2Score === 10) return "/";
   return f.ball2Score === 0 ? "–" : String(f.ball2Score);
@@ -121,10 +135,14 @@ function ball3Display(f: ScoreFrame): string {
     // If previous two balls were strikes, or ball2 made a spare
     const prevTotal =
       f.ball1Score === 10
-        ? f.ball2Score ?? 0
+        ? (f.ball2Score ?? 0)
         : f.ball1Score + (f.ball2Score ?? 0);
     if (f.ball1Score === 10 && f.ball2Score === 10) {
-      return f.ball3Score === 10 ? "X" : f.ball3Score === 0 ? "–" : String(f.ball3Score);
+      return f.ball3Score === 10
+        ? "X"
+        : f.ball3Score === 0
+          ? "–"
+          : String(f.ball3Score);
     }
     if (f.ball1Score === 10) {
       // Strike then non-strike on ball2
@@ -133,7 +151,11 @@ function ball3Display(f: ScoreFrame): string {
     }
     // Spare on balls 1+2
     if (prevTotal === 10) {
-      return f.ball3Score === 10 ? "X" : f.ball3Score === 0 ? "–" : String(f.ball3Score);
+      return f.ball3Score === 10
+        ? "X"
+        : f.ball3Score === 0
+          ? "–"
+          : String(f.ball3Score);
     }
   }
   return f.ball3Score === 0 ? "–" : String(f.ball3Score);
@@ -344,7 +366,11 @@ export function BowlingScoreboardEditable({
   const handleSaveFrame = (
     bowlerIdx: number,
     frameNumber: number,
-    updated: { ball1Score: number; ball2Score: number | null; ball3Score: number | null },
+    updated: {
+      ball1Score: number;
+      ball2Score: number | null;
+      ball3Score: number | null;
+    },
   ) => {
     const next = bowlers.map((b, bi) => {
       if (bi !== bowlerIdx) return b;
@@ -406,8 +432,7 @@ export function BowlingScoreboardEditable({
                     editTarget?.frameIdx === i;
                   const isCorrected = corrections?.some(
                     (c) =>
-                      c.bowlerIndex === bowlerIdx &&
-                      c.frameNumber === i + 1,
+                      c.bowlerIndex === bowlerIdx && c.frameNumber === i + 1,
                   );
 
                   return (
@@ -465,7 +490,11 @@ export function BowlingScoreboardEditable({
           frame={editFrame}
           isTenth={editFrame.frameNumber === 10}
           onSave={(updated) =>
-            handleSaveFrame(editTarget.bowlerIdx, editFrame.frameNumber, updated)
+            handleSaveFrame(
+              editTarget.bowlerIdx,
+              editFrame.frameNumber,
+              updated,
+            )
           }
           onClose={() => setEditTarget(null)}
         />
@@ -554,9 +583,7 @@ function FrameEditModal({
         }
         // If strike then non-strike on ball2, ball2+ball3 <= 10 unless ball2 is also a strike
         if (isStrikeB1 && ball2 !== 10 && ball2 + ball3 > 10) {
-          setError(
-            `Ball 2 + Ball 3 cannot exceed 10 (got ${ball2 + ball3})`,
-          );
+          setError(`Ball 2 + Ball 3 cannot exceed 10 (got ${ball2 + ball3})`);
           return;
         }
         onSave({ ball1Score: ball1, ball2Score: ball2, ball3Score: ball3 });
@@ -649,9 +676,7 @@ function FrameEditModal({
           )}
         </div>
 
-        {error && (
-          <p className="text-xs text-red-400">{error}</p>
-        )}
+        {error && <p className="text-xs text-red-400">{error}</p>}
 
         <div className="flex gap-3">
           <button
@@ -703,7 +728,9 @@ function FrameCell({
         />
       )}
       {/* Ball boxes row */}
-      <div className={`flex justify-end border-b border-border/50 ${isTenth ? "gap-0" : ""}`}>
+      <div
+        className={`flex justify-end border-b border-border/50 ${isTenth ? "gap-0" : ""}`}
+      >
         {isStrikeFrame ? (
           /* Strike on frames 1-9: show X spanning full width in the right box area */
           <>
@@ -716,17 +743,23 @@ function FrameCell({
           /* 10th frame: 3 ball boxes */
           <>
             <div className="flex-1 flex items-center justify-center h-5 border-r border-border/50">
-              <span className={`${b1 === "X" ? "text-neon-magenta font-bold" : frame.isBall1Split ? "text-neon-amber" : "text-foreground/70"}`}>
+              <span
+                className={`${b1 === "X" ? "text-neon-magenta font-bold" : frame.isBall1Split ? "text-neon-amber" : "text-foreground/70"}`}
+              >
                 {b1}
               </span>
             </div>
             <div className="flex-1 flex items-center justify-center h-5 border-r border-border/50">
-              <span className={`${b2 === "X" ? "text-neon-magenta font-bold" : b2 === "/" ? "text-neon-cyan font-bold" : "text-foreground/70"}`}>
+              <span
+                className={`${b2 === "X" ? "text-neon-magenta font-bold" : b2 === "/" ? "text-neon-cyan font-bold" : "text-foreground/70"}`}
+              >
                 {b2}
               </span>
             </div>
             <div className="flex-1 flex items-center justify-center h-5">
-              <span className={`${b3 === "X" ? "text-neon-magenta font-bold" : b3 === "/" ? "text-neon-cyan font-bold" : "text-foreground/70"}`}>
+              <span
+                className={`${b3 === "X" ? "text-neon-magenta font-bold" : b3 === "/" ? "text-neon-cyan font-bold" : "text-foreground/70"}`}
+              >
                 {b3}
               </span>
             </div>
@@ -735,12 +768,16 @@ function FrameCell({
           /* Regular frame: 2 ball boxes */
           <>
             <div className="w-1/2 flex items-center justify-center h-5 border-r border-border/50">
-              <span className={`${frame.isBall1Split ? "text-neon-amber" : "text-foreground/70"}`}>
+              <span
+                className={`${frame.isBall1Split ? "text-neon-amber" : "text-foreground/70"}`}
+              >
                 {b1}
               </span>
             </div>
             <div className="w-1/2 flex items-center justify-center h-5">
-              <span className={`${b2 === "/" ? "text-neon-cyan font-bold" : "text-foreground/70"}`}>
+              <span
+                className={`${b2 === "/" ? "text-neon-cyan font-bold" : "text-foreground/70"}`}
+              >
                 {b2}
               </span>
             </div>

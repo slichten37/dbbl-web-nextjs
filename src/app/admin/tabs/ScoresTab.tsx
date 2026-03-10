@@ -652,10 +652,7 @@ function SubmitScoresPanel({
                     </p>
                     <ul className="space-y-0.5">
                       {analysisResult.corrections.map((c, i) => (
-                        <li
-                          key={i}
-                          className="text-[10px] text-foreground/40"
-                        >
+                        <li key={i} className="text-[10px] text-foreground/40">
                           Frame {c.frameNumber}: {c.reason}
                         </li>
                       ))}
