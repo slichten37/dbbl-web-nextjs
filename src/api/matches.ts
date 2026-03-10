@@ -18,6 +18,15 @@ export interface BowlerFrameData {
   frames: FrameData[];
 }
 
+export interface FrameCorrection {
+  bowlerIndex: number;
+  frameNumber: number;
+  ball: "ball2" | "ball3";
+  originalValue: number;
+  correctedValue: number;
+  reason: string;
+}
+
 export interface ScorecardAnalysisResult {
   success: boolean;
   confidence: "HIGH" | "MEDIUM" | "LOW" | "UNREADABLE";
@@ -25,6 +34,7 @@ export interface ScorecardAnalysisResult {
   reasoning: string;
   processingTimeMs: number;
   errorMessage?: string;
+  corrections?: FrameCorrection[];
 }
 
 // ============================================================================

@@ -641,7 +641,27 @@ function SubmitScoresPanel({
               <BowlingScoreboardEditable
                 bowlers={editableBowlers}
                 onUpdate={setEditableBowlers}
+                corrections={analysisResult?.corrections}
               />
+
+              {analysisResult?.corrections &&
+                analysisResult.corrections.length > 0 && (
+                  <div className="rounded-lg border border-neon-amber/30 bg-neon-amber/5 px-3 py-2">
+                    <p className="text-[10px] font-medium text-neon-amber uppercase tracking-widest mb-1">
+                      Auto-corrections applied
+                    </p>
+                    <ul className="space-y-0.5">
+                      {analysisResult.corrections.map((c, i) => (
+                        <li
+                          key={i}
+                          className="text-[10px] text-foreground/40"
+                        >
+                          Frame {c.frameNumber}: {c.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
               {analysisResult?.reasoning && (
                 <p className="text-[10px] text-foreground/30 leading-relaxed">

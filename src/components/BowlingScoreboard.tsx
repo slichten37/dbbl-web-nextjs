@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { MatchFrame, MatchBowler } from "@/api/matches";
-import type { FrameData, BowlerFrameData } from "@/api/matches";
+import type { FrameData, BowlerFrameData, FrameCorrection } from "@/api/matches";
 
 // ============================================================================
 // Shared scoring helpers
@@ -318,11 +318,13 @@ export function BowlingScoreboardPreview({
 interface BowlingScoreboardEditableProps {
   bowlers: BowlerFrameData[];
   onUpdate: (bowlers: BowlerFrameData[]) => void;
+  corrections?: FrameCorrection[];
 }
 
 export function BowlingScoreboardEditable({
   bowlers,
   onUpdate,
+  corrections,
 }: BowlingScoreboardEditableProps) {
   const [editTarget, setEditTarget] = useState<{
     bowlerIdx: number;
@@ -402,6 +404,11 @@ export function BowlingScoreboardEditable({
                   const isEditing =
                     editTarget?.bowlerIdx === bowlerIdx &&
                     editTarget?.frameIdx === i;
+                  const isCorrected = corrections?.some(
+                    (c) =>
+                      c.bowlerIndex === bowlerIdx &&
+                      c.frameNumber === i + 1,
+                  );
 
                   return (
                     <td
@@ -409,8 +416,22 @@ export function BowlingScoreboardEditable({
                       className={`border p-0 cursor-pointer transition-colors ${
                         isEditing
                           ? "border-neon-cyan bg-neon-cyan/10"
-                          : "border-border bg-surface-light hover:bg-surface-light/60 hover:border-neon-cyan/30"
+                          : isCorrected
+                            ? "border-neon-amber bg-neon-amber/10 hover:bg-neon-amber/15"
+                            : "border-border bg-surface-light hover:bg-surface-light/60 hover:border-neon-cyan/30"
                       }`}
+                      title={
+                        isCorrected
+                          ? corrections
+                              ?.filter(
+                                (c) =>
+                                  c.bowlerIndex === bowlerIdx &&
+                                  c.frameNumber === i + 1,
+                              )
+                              .map((c) => c.reason)
+                              .join("; ")
+                          : undefined
+                      }
                       onClick={() =>
                         frame && setEditTarget({ bowlerIdx, frameIdx: i })
                       }
@@ -420,6 +441,7 @@ export function BowlingScoreboardEditable({
                           frame={frame}
                           total={total}
                           isTenth={isTenth}
+                          isCorrected={isCorrected}
                         />
                       ) : (
                         <div className="h-12" />
@@ -658,10 +680,12 @@ function FrameCell({
   frame,
   total,
   isTenth,
+  isCorrected,
 }: {
   frame: ScoreFrame;
   total: number | null;
   isTenth: boolean;
+  isCorrected?: boolean;
 }) {
   const b1 = ball1Display(frame);
   const b2 = ball2Display(frame);
@@ -670,7 +694,14 @@ function FrameCell({
   const isStrikeFrame = isStrike(frame) && !isTenth;
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col relative">
+      {/* Correction indicator dot */}
+      {isCorrected && (
+        <div
+          className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-neon-amber z-10"
+          title="Auto-corrected — please verify"
+        />
+      )}
       {/* Ball boxes row */}
       <div className={`flex justify-end border-b border-border/50 ${isTenth ? "gap-0" : ""}`}>
         {isStrikeFrame ? (
