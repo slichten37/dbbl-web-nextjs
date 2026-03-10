@@ -15,6 +15,7 @@ export interface FrameData {
 export interface BowlerFrameData {
   bowlerName: string;
   matchedBowlerId: string;
+  visibleFinalScore: number | null;
   frames: FrameData[];
 }
 
