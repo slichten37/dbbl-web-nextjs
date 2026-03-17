@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useCallback } from "react";
 import type { MatchFrame, MatchBowler } from "@/api/matches";
 import type {
   FrameData,
@@ -334,7 +334,7 @@ export function BowlingScoreboardPreview({
 }
 
 // ============================================================================
-// Editable variant (for score submission page — click a frame to edit)
+// Editable variant (inline inputs — type and Tab through balls)
 // ============================================================================
 
 interface BowlingScoreboardEditableProps {
@@ -348,10 +348,62 @@ export function BowlingScoreboardEditable({
   onUpdate,
   corrections,
 }: BowlingScoreboardEditableProps) {
-  const [editTarget, setEditTarget] = useState<{
-    bowlerIdx: number;
-    frameIdx: number;
-  } | null>(null);
+  // Ref map: inputRefs[bowlerIdx][globalBallIndex] = HTMLInputElement
+  const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+
+  const setInputRef = useCallback(
+    (bowlerIdx: number, ballKey: string, el: HTMLInputElement | null) => {
+      const key = `${bowlerIdx}-${ballKey}`;
+      if (el) inputRefs.current.set(key, el);
+      else inputRefs.current.delete(key);
+    },
+    [],
+  );
+
+  // Build an ordered list of focusable ball keys per bowler
+  const getBallKeys = useCallback(
+    (bowlerIdx: number): string[] => {
+      const b = bowlers[bowlerIdx];
+      if (!b) return [];
+      const keys: string[] = [];
+      const sorted = [...b.frames].sort(
+        (a, c) => a.frameNumber - c.frameNumber,
+      );
+      for (const f of sorted) {
+        keys.push(`f${f.frameNumber}-b1`);
+        if (f.frameNumber < 10) {
+          // Frames 1-9: skip ball2 if strike
+          if (f.ball1Score !== 10) {
+            keys.push(`f${f.frameNumber}-b2`);
+          }
+        } else {
+          // Frame 10: always has ball2, ball3 if strike or spare
+          keys.push(`f${f.frameNumber}-b2`);
+          if (
+            f.ball1Score === 10 ||
+            f.ball1Score + (f.ball2Score ?? 0) === 10
+          ) {
+            keys.push(`f${f.frameNumber}-b3`);
+          }
+        }
+      }
+      return keys;
+    },
+    [bowlers],
+  );
+
+  const focusNext = useCallback(
+    (bowlerIdx: number, currentKey: string) => {
+      const keys = getBallKeys(bowlerIdx);
+      const idx = keys.indexOf(currentKey);
+      if (idx >= 0 && idx < keys.length - 1) {
+        const nextKey = `${bowlerIdx}-${keys[idx + 1]}`;
+        // Small delay to let React re-render (ball2/ball3 visibility may change)
+        setTimeout(() => inputRefs.current.get(nextKey)?.focus(), 0);
+      }
+    },
+    [getBallKeys],
+  );
 
   const bowlerRows = useMemo(() => {
     return bowlers.map((b) => {
@@ -363,337 +415,277 @@ export function BowlingScoreboardEditable({
     });
   }, [bowlers]);
 
-  const handleSaveFrame = (
+  const handleBallChange = (
     bowlerIdx: number,
     frameNumber: number,
-    updated: {
-      ball1Score: number;
-      ball2Score: number | null;
-      ball3Score: number | null;
-    },
+    ball: "ball1Score" | "ball2Score" | "ball3Score",
+    raw: string,
   ) => {
+    const val = raw === "" ? 0 : parseInt(raw, 10);
+    if (isNaN(val) || val < 0 || val > 10) return;
+
     const next = bowlers.map((b, bi) => {
       if (bi !== bowlerIdx) return b;
       return {
         ...b,
-        frames: b.frames.map((f) =>
-          f.frameNumber === frameNumber ? { ...f, ...updated } : f,
-        ),
+        frames: b.frames.map((f) => {
+          if (f.frameNumber !== frameNumber) return f;
+          const updated = { ...f, [ball]: val };
+
+          if (frameNumber < 10) {
+            // Strike in frames 1-9: clear ball2
+            if (ball === "ball1Score" && val === 10) {
+              updated.ball2Score = null;
+            }
+            // If ball1 changed from strike to non-strike, ensure ball2 exists
+            if (ball === "ball1Score" && val < 10 && updated.ball2Score === null) {
+              updated.ball2Score = 0;
+            }
+            // Clamp ball2 so ball1+ball2 <= 10
+            if (
+              updated.ball2Score !== null &&
+              updated.ball1Score + updated.ball2Score > 10
+            ) {
+              updated.ball2Score = 10 - updated.ball1Score;
+            }
+            updated.ball3Score = null;
+          } else {
+            // Frame 10 logic
+            const b1 = updated.ball1Score;
+            const b2 = updated.ball2Score ?? 0;
+            const needsBall3 = b1 === 10 || b1 + b2 === 10;
+
+            // Clamp: if not strike on b1, b1+b2 <= 10
+            if (b1 !== 10 && b1 + b2 > 10) {
+              updated.ball2Score = 10 - b1;
+            }
+            // Clamp: if strike on b1, non-strike b2, then b2+b3 <= 10
+            if (
+              b1 === 10 &&
+              (updated.ball2Score ?? 0) !== 10 &&
+              updated.ball3Score !== null &&
+              (updated.ball2Score ?? 0) + (updated.ball3Score ?? 0) > 10
+            ) {
+              updated.ball3Score =
+                10 - (updated.ball2Score ?? 0);
+            }
+
+            if (needsBall3 && updated.ball3Score === null) {
+              updated.ball3Score = 0;
+            }
+            if (!needsBall3) {
+              updated.ball3Score = null;
+            }
+          }
+
+          return updated;
+        }),
       };
     });
     onUpdate(next);
-    setEditTarget(null);
   };
 
-  const editFrame =
-    editTarget !== null
-      ? bowlerRows[editTarget.bowlerIdx]?.frames[editTarget.frameIdx]
-      : null;
-
   return (
-    <>
-      <div className="overflow-x-auto">
-        <p className="text-[10px] text-foreground/30 mb-2">
-          Tap any frame to edit scores
-        </p>
-        <table className="w-full border-collapse text-xs">
-          <thead>
-            <tr>
-              <th className="border border-border bg-surface px-2 py-1.5 text-left text-[10px] uppercase tracking-widest text-foreground/40 w-24">
-                Bowler
+    <div className="overflow-x-auto">
+      <p className="text-[10px] text-foreground/30 mb-2">
+        Type pin counts and press Tab to advance
+      </p>
+      <table className="w-full border-collapse text-xs">
+        <thead>
+          <tr>
+            <th className="border border-border bg-surface px-2 py-1.5 text-left text-[10px] uppercase tracking-widest text-foreground/40 w-24">
+              Bowler
+            </th>
+            {Array.from({ length: 10 }, (_, i) => (
+              <th
+                key={i}
+                className={`border border-border bg-surface px-1 py-1.5 text-center text-[10px] uppercase tracking-widest text-foreground/40 ${
+                  i === 9 ? "w-20" : "w-14"
+                }`}
+              >
+                {i + 1}
               </th>
-              {Array.from({ length: 10 }, (_, i) => (
-                <th
-                  key={i}
-                  className={`border border-border bg-surface px-1 py-1.5 text-center text-[10px] uppercase tracking-widest text-foreground/40 ${
-                    i === 9 ? "w-20" : "w-14"
-                  }`}
-                >
-                  {i + 1}
-                </th>
-              ))}
-              <th className="border border-border bg-surface px-2 py-1.5 text-center text-[10px] uppercase tracking-widest text-neon-cyan w-14">
-                Total
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {bowlerRows.map(({ name, frames: bf, totals }, bowlerIdx) => (
-              <tr key={bowlerIdx}>
-                <td className="border border-border bg-surface-light px-2 py-1 font-medium text-foreground/80 whitespace-nowrap">
-                  {name}
-                </td>
-                {Array.from({ length: 10 }, (_, i) => {
-                  const frame = bf.find((f) => f.frameNumber === i + 1);
-                  const total = totals[i];
-                  const isTenth = i === 9;
-                  const isEditing =
-                    editTarget?.bowlerIdx === bowlerIdx &&
-                    editTarget?.frameIdx === i;
-                  const isCorrected = corrections?.some(
-                    (c) =>
-                      c.bowlerIndex === bowlerIdx && c.frameNumber === i + 1,
-                  );
-
-                  return (
-                    <td
-                      key={i}
-                      className={`border p-0 cursor-pointer transition-colors ${
-                        isEditing
-                          ? "border-neon-cyan bg-neon-cyan/10"
-                          : isCorrected
-                            ? "border-neon-amber bg-neon-amber/10 hover:bg-neon-amber/15"
-                            : "border-border bg-surface-light hover:bg-surface-light/60 hover:border-neon-cyan/30"
-                      }`}
-                      title={
-                        isCorrected
-                          ? corrections
-                              ?.filter(
-                                (c) =>
-                                  c.bowlerIndex === bowlerIdx &&
-                                  c.frameNumber === i + 1,
-                              )
-                              .map((c) => c.reason)
-                              .join("; ")
-                          : undefined
-                      }
-                      onClick={() =>
-                        frame && setEditTarget({ bowlerIdx, frameIdx: i })
-                      }
-                    >
-                      {frame ? (
-                        <FrameCell
-                          frame={frame}
-                          total={total}
-                          isTenth={isTenth}
-                          isCorrected={isCorrected}
-                        />
-                      ) : (
-                        <div className="h-12" />
-                      )}
-                    </td>
-                  );
-                })}
-                <td className="border border-border bg-surface-light px-2 py-1 text-center font-bold text-neon-lime text-glow-lime text-sm">
-                  {totals[9] ?? "–"}
-                </td>
-              </tr>
             ))}
-          </tbody>
-        </table>
-      </div>
+            <th className="border border-border bg-surface px-2 py-1.5 text-center text-[10px] uppercase tracking-widest text-neon-cyan w-14">
+              Total
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {bowlerRows.map(({ name, frames: bf, totals }, bowlerIdx) => (
+            <tr key={bowlerIdx}>
+              <td className="border border-border bg-surface-light px-2 py-1 font-medium text-foreground/80 whitespace-nowrap">
+                {name}
+              </td>
+              {Array.from({ length: 10 }, (_, i) => {
+                const frame = bf.find((f) => f.frameNumber === i + 1);
+                const total = totals[i];
+                const isTenth = i === 9;
+                const isCorrected = corrections?.some(
+                  (c) =>
+                    c.bowlerIndex === bowlerIdx && c.frameNumber === i + 1,
+                );
 
-      {/* Edit modal */}
-      {editTarget !== null && editFrame && (
-        <FrameEditModal
-          bowlerName={bowlerRows[editTarget.bowlerIdx].name}
-          frame={editFrame}
-          isTenth={editFrame.frameNumber === 10}
-          onSave={(updated) =>
-            handleSaveFrame(
-              editTarget.bowlerIdx,
-              editFrame.frameNumber,
-              updated,
-            )
-          }
-          onClose={() => setEditTarget(null)}
-        />
-      )}
-    </>
+                if (!frame) return <td key={i} className="border border-border bg-surface-light p-0"><div className="h-12" /></td>;
+
+                const isStrikeF = isStrike(frame) && !isTenth;
+
+                return (
+                  <td
+                    key={i}
+                    className={`border p-0 transition-colors ${
+                      isCorrected
+                        ? "border-neon-amber bg-neon-amber/10"
+                        : "border-border bg-surface-light"
+                    }`}
+                    title={
+                      isCorrected
+                        ? corrections
+                            ?.filter(
+                              (c) =>
+                                c.bowlerIndex === bowlerIdx &&
+                                c.frameNumber === i + 1,
+                            )
+                            .map((c) => c.reason)
+                            .join("; ")
+                        : undefined
+                    }
+                  >
+                    <div className="flex flex-col relative">
+                      {isCorrected && (
+                        <div className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-neon-amber z-10" title="Auto-corrected" />
+                      )}
+                      {/* Ball inputs row */}
+                      <div className={`flex justify-end border-b border-border/50 ${isTenth ? "gap-0" : ""}`}>
+                        {isStrikeF ? (
+                          /* Strike frames 1-9: show ball1 input spanning left, X display right */
+                          <>
+                            <div className="w-1/2 border-r border-border/50 h-6 flex items-center justify-center">
+                              <BallInput
+                                value={frame.ball1Score}
+                                onChange={(v) => handleBallChange(bowlerIdx, frame.frameNumber, "ball1Score", v)}
+                                onAdvance={() => focusNext(bowlerIdx, `f${frame.frameNumber}-b1`)}
+                                inputRef={(el) => setInputRef(bowlerIdx, `f${frame.frameNumber}-b1`, el)}
+                              />
+                            </div>
+                            <div className="w-1/2 flex items-center justify-center h-6 text-neon-magenta font-bold text-[10px]">
+                              X
+                            </div>
+                          </>
+                        ) : isTenth ? (
+                          /* 10th frame: up to 3 inputs */
+                          <>
+                            <div className="flex-1 flex items-center justify-center h-6 border-r border-border/50">
+                              <BallInput
+                                value={frame.ball1Score}
+                                onChange={(v) => handleBallChange(bowlerIdx, frame.frameNumber, "ball1Score", v)}
+                                onAdvance={() => focusNext(bowlerIdx, `f${frame.frameNumber}-b1`)}
+                                inputRef={(el) => setInputRef(bowlerIdx, `f${frame.frameNumber}-b1`, el)}
+                              />
+                            </div>
+                            <div className="flex-1 flex items-center justify-center h-6 border-r border-border/50">
+                              <BallInput
+                                value={frame.ball2Score ?? 0}
+                                onChange={(v) => handleBallChange(bowlerIdx, frame.frameNumber, "ball2Score", v)}
+                                onAdvance={() => focusNext(bowlerIdx, `f${frame.frameNumber}-b2`)}
+                                inputRef={(el) => setInputRef(bowlerIdx, `f${frame.frameNumber}-b2`, el)}
+                              />
+                            </div>
+                            <div className="flex-1 flex items-center justify-center h-6">
+                              {frame.ball3Score !== null ? (
+                                <BallInput
+                                  value={frame.ball3Score}
+                                  onChange={(v) => handleBallChange(bowlerIdx, frame.frameNumber, "ball3Score", v)}
+                                  onAdvance={() => focusNext(bowlerIdx, `f${frame.frameNumber}-b3`)}
+                                  inputRef={(el) => setInputRef(bowlerIdx, `f${frame.frameNumber}-b3`, el)}
+                                />
+                              ) : (
+                                <span className="text-foreground/20 text-[10px]">–</span>
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          /* Regular frame: 2 inputs */
+                          <>
+                            <div className="w-1/2 flex items-center justify-center h-6 border-r border-border/50">
+                              <BallInput
+                                value={frame.ball1Score}
+                                onChange={(v) => handleBallChange(bowlerIdx, frame.frameNumber, "ball1Score", v)}
+                                onAdvance={() => focusNext(bowlerIdx, `f${frame.frameNumber}-b1`)}
+                                inputRef={(el) => setInputRef(bowlerIdx, `f${frame.frameNumber}-b1`, el)}
+                              />
+                            </div>
+                            <div className="w-1/2 flex items-center justify-center h-6">
+                              <BallInput
+                                value={frame.ball2Score ?? 0}
+                                onChange={(v) => handleBallChange(bowlerIdx, frame.frameNumber, "ball2Score", v)}
+                                onAdvance={() => focusNext(bowlerIdx, `f${frame.frameNumber}-b2`)}
+                                inputRef={(el) => setInputRef(bowlerIdx, `f${frame.frameNumber}-b2`, el)}
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      {/* Running total */}
+                      <div className="flex items-center justify-center h-7 text-foreground/60 font-medium">
+                        {total ?? ""}
+                      </div>
+                    </div>
+                  </td>
+                );
+              })}
+              <td className="border border-border bg-surface-light px-2 py-1 text-center font-bold text-neon-lime text-glow-lime text-sm">
+                {totals[9] ?? "–"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 // ============================================================================
-// Frame edit modal
+// Inline ball input — tiny number input for a single ball
 // ============================================================================
 
-function FrameEditModal({
-  bowlerName,
-  frame,
-  isTenth,
-  onSave,
-  onClose,
+function BallInput({
+  value,
+  onChange,
+  onAdvance,
+  inputRef,
 }: {
-  bowlerName: string;
-  frame: ScoreFrame;
-  isTenth: boolean;
-  onSave: (updated: {
-    ball1Score: number;
-    ball2Score: number | null;
-    ball3Score: number | null;
-  }) => void;
-  onClose: () => void;
+  value: number;
+  onChange: (raw: string) => void;
+  onAdvance: () => void;
+  inputRef: (el: HTMLInputElement | null) => void;
 }) {
-  const [b1, setB1] = useState(String(frame.ball1Score));
-  const [b2, setB2] = useState(
-    frame.ball2Score !== null ? String(frame.ball2Score) : "",
-  );
-  const [b3, setB3] = useState(
-    frame.ball3Score !== null ? String(frame.ball3Score) : "",
-  );
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSave = () => {
-    const ball1 = parseInt(b1, 10);
-    const ball2 = b2 !== "" ? parseInt(b2, 10) : null;
-    const ball3 = b3 !== "" ? parseInt(b3, 10) : null;
-
-    // Validate
-    if (isNaN(ball1) || ball1 < 0 || ball1 > 10) {
-      setError("Ball 1 must be 0–10");
-      return;
-    }
-
-    if (!isTenth) {
-      // Frames 1-9
-      if (ball1 === 10) {
-        // Strike — ball2 should be null
-        onSave({ ball1Score: 10, ball2Score: null, ball3Score: null });
-        return;
-      }
-      if (ball2 === null || isNaN(ball2) || ball2 < 0 || ball2 > 10) {
-        setError("Ball 2 must be 0–10");
-        return;
-      }
-      if (ball1 + ball2 > 10) {
-        setError(`Ball 1 + Ball 2 cannot exceed 10 (got ${ball1 + ball2})`);
-        return;
-      }
-      onSave({ ball1Score: ball1, ball2Score: ball2, ball3Score: null });
-    } else {
-      // Frame 10
-      if (ball2 === null || isNaN(ball2) || ball2 < 0 || ball2 > 10) {
-        setError("Ball 2 must be 0–10");
-        return;
-      }
-
-      const isStrikeB1 = ball1 === 10;
-      const isSpareB1B2 = !isStrikeB1 && ball1 + ball2 === 10;
-
-      if (!isStrikeB1 && ball1 + ball2 > 10) {
-        setError(`Ball 1 + Ball 2 cannot exceed 10 (got ${ball1 + ball2})`);
-        return;
-      }
-
-      if (isStrikeB1 || isSpareB1B2) {
-        // Needs ball 3
-        if (ball3 === null || isNaN(ball3) || ball3 < 0 || ball3 > 10) {
-          setError("Ball 3 is required (0–10) after a strike or spare");
-          return;
-        }
-        // If strike then non-strike on ball2, ball2+ball3 <= 10 unless ball2 is also a strike
-        if (isStrikeB1 && ball2 !== 10 && ball2 + ball3 > 10) {
-          setError(`Ball 2 + Ball 3 cannot exceed 10 (got ${ball2 + ball3})`);
-          return;
-        }
-        onSave({ ball1Score: ball1, ball2Score: ball2, ball3Score: ball3 });
-      } else {
-        // Open frame — no ball 3
-        onSave({ ball1Score: ball1, ball2Score: ball2, ball3Score: null });
-      }
-    }
-  };
-
-  // Determine if ball2 / ball3 fields should show
-  const showBall2 = isTenth || b1 !== "10";
-  const showBall3 = isTenth;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+    <input
+      ref={inputRef}
+      type="number"
+      inputMode="numeric"
+      min={0}
+      max={10}
+      value={value}
+      onChange={(e) => {
+        onChange(e.target.value);
+        // Auto-advance on single digit entry (0-9)
+        const v = parseInt(e.target.value, 10);
+        if (!isNaN(v) && v >= 0 && v <= 9) {
+          onAdvance();
+        }
       }}
-    >
-      <div className="w-full max-w-xs rounded-xl border border-border bg-surface p-5 space-y-4">
-        <div>
-          <h4 className="text-sm font-semibold text-foreground/80">
-            Edit Frame {frame.frameNumber}
-          </h4>
-          <p className="text-xs text-foreground/40">{bowlerName}</p>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <label className="text-[10px] uppercase tracking-widest text-foreground/40 block mb-1">
-              Ball 1
-            </label>
-            <input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={10}
-              value={b1}
-              onChange={(e) => {
-                setB1(e.target.value);
-                setError(null);
-              }}
-              className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground focus:border-neon-cyan focus:outline-none"
-            />
-          </div>
-
-          {showBall2 && (
-            <div>
-              <label className="text-[10px] uppercase tracking-widest text-foreground/40 block mb-1">
-                Ball 2
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={10}
-                value={b2}
-                onChange={(e) => {
-                  setB2(e.target.value);
-                  setError(null);
-                }}
-                className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground focus:border-neon-cyan focus:outline-none"
-              />
-            </div>
-          )}
-
-          {showBall3 && (
-            <div>
-              <label className="text-[10px] uppercase tracking-widest text-foreground/40 block mb-1">
-                Ball 3{" "}
-                <span className="text-foreground/20">
-                  (only if strike or spare)
-                </span>
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={10}
-                value={b3}
-                onChange={(e) => {
-                  setB3(e.target.value);
-                  setError(null);
-                }}
-                className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground focus:border-neon-cyan focus:outline-none"
-              />
-            </div>
-          )}
-        </div>
-
-        {error && <p className="text-xs text-red-400">{error}</p>}
-
-        <div className="flex gap-3">
-          <button
-            onClick={handleSave}
-            className="flex-1 rounded-lg border border-neon-cyan/60 bg-neon-cyan/10 py-2 text-sm font-medium text-neon-cyan transition-all hover:bg-neon-cyan/20"
-          >
-            Save
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 rounded-lg border border-border bg-surface py-2 text-sm font-medium text-foreground/50 transition-all hover:border-foreground/30"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+      onKeyDown={(e) => {
+        // Advance on Tab (default behavior) or Enter
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onAdvance();
+        }
+      }}
+      onFocus={(e) => e.target.select()}
+      className="w-full h-full bg-transparent text-center text-[11px] text-foreground/80 focus:outline-none focus:bg-neon-cyan/10 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+    />
   );
 }
 

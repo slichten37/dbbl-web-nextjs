@@ -107,6 +107,11 @@ function SubmitScoresPanel({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ---- Manual entry ----
+  const [isManualEntry, setIsManualEntry] = useState(false);
+  const [manualEntryBowlerIndex, setManualEntryBowlerIndex] = useState(0);
+  const [isManualReview, setIsManualReview] = useState(false);
+
   // Auto-select first week
   useEffect(() => {
     if (weeks.length > 0 && selectedWeek === null) {
@@ -177,6 +182,9 @@ function SubmitScoresPanel({
       setFullMatch(updatedMatch);
       setAnalysisResult(null);
       setEditableBowlers(null);
+      setIsManualEntry(false);
+      setManualEntryBowlerIndex(0);
+      setIsManualReview(false);
     } catch {
       setUploadError("Failed to save scores. Please try again.");
     } finally {
@@ -188,6 +196,31 @@ function SubmitScoresPanel({
   const handleRetry = () => {
     setAnalysisResult(null);
     setEditableBowlers(null);
+    setUploadError(null);
+    setIsManualEntry(false);
+    setManualEntryBowlerIndex(0);
+    setIsManualReview(false);
+  };
+
+  // Initialize blank bowlers for manual entry
+  const startManualEntry = () => {
+    const blank: BowlerFrameData[] = matchBowlers.map((b) => ({
+      bowlerName: b.name,
+      matchedBowlerId: b.id,
+      visibleFinalScore: null,
+      frames: Array.from({ length: 10 }, (_, i) => ({
+        frameNumber: i + 1,
+        ball1Score: 0,
+        ball2Score: 0,
+        ball3Score: null,
+        isBall1Split: false,
+      })),
+    }));
+    setEditableBowlers(blank);
+    setIsManualEntry(true);
+    setManualEntryBowlerIndex(0);
+    setIsManualReview(false);
+    setAnalysisResult(null);
     setUploadError(null);
   };
 
@@ -384,6 +417,9 @@ function SubmitScoresPanel({
               setAnalysisResult(null);
               setEditableBowlers(null);
               setUploadError(null);
+              setIsManualEntry(false);
+              setManualEntryBowlerIndex(0);
+              setIsManualReview(false);
             }}
             className="text-xs text-foreground/40 hover:text-foreground/60 transition-colors"
           >
@@ -523,6 +559,9 @@ function SubmitScoresPanel({
                     setAnalysisResult(null);
                     setEditableBowlers(null);
                     setUploadError(null);
+                    setIsManualEntry(false);
+                    setManualEntryBowlerIndex(0);
+                    setIsManualReview(false);
                   }}
                   className={`rounded-full border px-3 py-1 text-xs font-medium transition-all duration-200 ${
                     selectedGameNumber === gn
@@ -543,19 +582,27 @@ function SubmitScoresPanel({
                 <h3 className="text-sm font-semibold text-foreground/60 uppercase tracking-widest">
                   Game {selectedGameNumber} Scores
                 </h3>
-                <label className="cursor-pointer rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-3 py-1.5 text-xs font-medium text-neon-amber transition-all hover:bg-neon-amber/20">
-                  Re-scan Scorecard
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={startManualEntry}
+                    className="rounded-lg border border-neon-cyan/40 bg-neon-cyan/10 px-3 py-1.5 text-xs font-medium text-neon-cyan transition-all hover:bg-neon-cyan/20"
+                  >
+                    ✏️ Enter Manually
+                  </button>
+                  <label className="cursor-pointer rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-3 py-1.5 text-xs font-medium text-neon-amber transition-all hover:bg-neon-amber/20">
+                    Re-scan Scorecard
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+                  </label>
+                </div>
               </div>
               <p className="text-[10px] text-foreground/30">
-                ⚠ Re-scanning will overwrite existing scores for Game{" "}
+                ⚠ Re-scanning or manual entry will overwrite existing scores for Game{" "}
                 {selectedGameNumber}
               </p>
               <BowlingScoreboard
@@ -575,18 +622,27 @@ function SubmitScoresPanel({
                   No scores for Game {selectedGameNumber}
                 </p>
                 <p className="text-xs text-foreground/30 max-w-xs text-center">
-                  Take a photo of the full scorecard or upload an image
+                  Take a photo of the full scorecard, upload an image, or enter
+                  scores manually
                 </p>
-                <label className="cursor-pointer rounded-lg border border-neon-amber/60 bg-neon-amber/10 px-5 py-2.5 text-sm font-medium text-neon-amber transition-all hover:bg-neon-amber/20">
-                  📷 Upload Scorecard
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-                </label>
+                <div className="flex gap-3">
+                  <label className="cursor-pointer rounded-lg border border-neon-amber/60 bg-neon-amber/10 px-5 py-2.5 text-sm font-medium text-neon-amber transition-all hover:bg-neon-amber/20">
+                    📷 Upload Scorecard
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+                  </label>
+                  <button
+                    onClick={startManualEntry}
+                    className="rounded-lg border border-neon-cyan/60 bg-neon-cyan/10 px-5 py-2.5 text-sm font-medium text-neon-cyan transition-all hover:bg-neon-cyan/20"
+                  >
+                    ✏️ Enter Manually
+                  </button>
+                </div>
               </div>
             )}
 
@@ -616,8 +672,130 @@ function SubmitScoresPanel({
             </div>
           )}
 
-          {/* Editable confirmation screen */}
-          {editableBowlers && !submitting && (
+          {/* Manual entry — bowler stepper */}
+          {isManualEntry &&
+            editableBowlers &&
+            !isManualReview &&
+            !submitting && (
+              <div className="space-y-4">
+                {/* Progress indicator */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground/60 uppercase tracking-widest">
+                      Bowler {manualEntryBowlerIndex + 1} of{" "}
+                      {editableBowlers.length}
+                    </h3>
+                    <p className="text-xs text-neon-cyan mt-0.5">
+                      {editableBowlers[manualEntryBowlerIndex]?.bowlerName}
+                    </p>
+                  </div>
+                  {/* Progress dots */}
+                  <div className="flex gap-1.5">
+                    {editableBowlers.map((_, i) => (
+                      <div
+                        key={i}
+                        className={`w-2 h-2 rounded-full transition-colors ${
+                          i === manualEntryBowlerIndex
+                            ? "bg-neon-cyan"
+                            : i < manualEntryBowlerIndex
+                              ? "bg-neon-lime"
+                              : "bg-foreground/20"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <BowlingScoreboardEditable
+                  bowlers={[editableBowlers[manualEntryBowlerIndex]]}
+                  onUpdate={(updated) => {
+                    const next = editableBowlers.map((b, i) =>
+                      i === manualEntryBowlerIndex ? updated[0] : b,
+                    );
+                    setEditableBowlers(next);
+                  }}
+                />
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() =>
+                      setManualEntryBowlerIndex((i) => Math.max(0, i - 1))
+                    }
+                    disabled={manualEntryBowlerIndex === 0}
+                    className="flex-1 rounded-lg border border-border bg-surface py-2.5 text-sm font-medium text-foreground/50 transition-all hover:border-foreground/30 hover:text-foreground/70 disabled:opacity-30 disabled:hover:border-border"
+                  >
+                    ← Previous
+                  </button>
+                  {manualEntryBowlerIndex < editableBowlers.length - 1 ? (
+                    <button
+                      onClick={() =>
+                        setManualEntryBowlerIndex((i) => i + 1)
+                      }
+                      className="flex-1 rounded-lg border border-neon-cyan/60 bg-neon-cyan/10 py-2.5 text-sm font-medium text-neon-cyan transition-all hover:bg-neon-cyan/20"
+                    >
+                      Next Bowler →
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsManualReview(true)}
+                      className="flex-1 rounded-lg border border-neon-lime/60 bg-neon-lime/10 py-2.5 text-sm font-medium text-neon-lime transition-all hover:bg-neon-lime/20"
+                    >
+                      Review All →
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={handleRetry}
+                  className="w-full text-center text-xs text-foreground/30 hover:text-foreground/50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+          {/* Manual entry — full review */}
+          {isManualEntry &&
+            editableBowlers &&
+            isManualReview &&
+            !submitting && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-foreground/60 uppercase tracking-widest">
+                  Review All Scores
+                </h3>
+
+                <BowlingScoreboardEditable
+                  bowlers={editableBowlers}
+                  onUpdate={setEditableBowlers}
+                />
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleAccept}
+                    className="flex-1 rounded-lg border border-neon-lime/60 bg-neon-lime/10 py-2.5 text-sm font-medium text-neon-lime transition-all hover:bg-neon-lime/20 glow-lime"
+                  >
+                    ✓ Save Scores
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsManualReview(false);
+                      setManualEntryBowlerIndex(editableBowlers.length - 1);
+                    }}
+                    className="flex-1 rounded-lg border border-border bg-surface py-2.5 text-sm font-medium text-foreground/50 transition-all hover:border-foreground/30 hover:text-foreground/70"
+                  >
+                    ← Back
+                  </button>
+                </div>
+                <button
+                  onClick={handleRetry}
+                  className="w-full text-center text-xs text-foreground/30 hover:text-foreground/50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+          {/* OCR editable confirmation screen */}
+          {!isManualEntry && editableBowlers && !submitting && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-foreground/60 uppercase tracking-widest">
